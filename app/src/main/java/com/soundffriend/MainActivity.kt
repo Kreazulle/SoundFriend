@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             SoundFriendApp()
         }
@@ -177,18 +178,28 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "HELP NEEDED:\n$message",
+                                text = "HELP NEEDED:",
                                 color = Color.White,
-                                fontSize = 20.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = message,
+                                color = Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(26.dp))
                             Button(
                                 onClick = { viewModel.dismissAlert() },
-                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red)
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red),
+                                modifier = Modifier.size(56.dp)
                             ) {
-                                Text("ACKNOWLEDGE")
+                                Text("OK", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -367,7 +378,19 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
             }
         }
         item {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                Text(text = "Alerts (OSC):", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Port 5006", fontSize = 14.sp)
+            }
+        }
+        item {
             Spacer(modifier = Modifier.height(12.dp))
+        }
+        item {
+            Text(text = "Examples:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         item {
             Column(
