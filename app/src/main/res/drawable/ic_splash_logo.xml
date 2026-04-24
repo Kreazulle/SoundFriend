@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Outer Circle -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M50,5A45,45 0,1 1,49.9 5Z"
+        android:fillAlpha="0.1"/>
+
+    <!-- Sound Waves / Level Meter Bars -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M30,40h6v20h-6z M47,30h6v40h-6z M64,45h6v10h-6z"/>
+
+    <!-- Subtle Heart outline -->
+    <path
+        android:strokeColor="#FF0000"
+        android:strokeWidth="2"
+        android:pathData="M50,75 L46,71 C32,58 22,50 22,40 C22,32 28,26 36,26 C41,26 46,28 50,32 C54,28 59,26 64,26 C72,26 78,32 78,40 C78,50 68,58 54,71 L50,75 Z"
+        android:fillColor="#00000000"/>
+</vector>
