@@ -1,0 +1,36 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Solid Black Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M0,0h100v100h-100z" />
+
+    <!-- Centered Picasso-style Abstract Bass Clef (FA) -->
+    <group
+        android:pivotX="54.5"
+        android:pivotY="57"
+        android:scaleX="1.15"
+        android:scaleY="1.15"
+        android:translateX="-4.5"
+        android:translateY="-7">
+
+        <!-- The Fibonacci-styled line -->
+        <path
+            android:strokeColor="#FF0000"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M22,47
+                      C22,17 67,17 82,47
+                      C92,72 62,97 17,97" />
+
+        <!-- Asymmetrically aligned dots inside the ear -->
+        <!-- Closer together and shifted more to the right -->
+        <path
+            android:fillColor="#FF0000"
+            android:pathData="M63,42 A3.5,3.5 0,1,1 62.9,42 Z M65,52 A3.5,3.5 0,1,1 64.9,52 Z" />
+    </group>
+</vector>

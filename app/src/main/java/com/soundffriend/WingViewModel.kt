@@ -32,9 +32,7 @@ class WingViewModel : ViewModel() {
         _alertMessage.value = null
     }
 
-    init {
-        startDiscovery()
-    }
+
 
     fun startDiscovery() {
         viewModelScope.launch(Dispatchers.IO) {

@@ -10,6 +10,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,7 +22,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -63,6 +68,8 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     val selectedMixer by viewModel.selectedMixer.collectAsState()
     val discoveredMixers by viewModel.discoveredMixers.collectAsState()
     
+    var animationFinished by remember { mutableStateOf(false) }
+
     // Trigger vibration when alert arrives
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(alertMessage) {
@@ -86,43 +93,45 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     MaterialTheme {
         Scaffold(
             timeText = {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (isHelpScreen && alertMessage == null) {
-                        // Black masks under the curved texts (Segment-cut style) - Only on Help Screen
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Top Segment Mask (under clock) - Slightly larger (+10px/degrees equivalent)
-                            drawArc(
-                                color = Color.Black,
-                                startAngle = 220f,
-                                sweepAngle = 100f,
-                                useCenter = false
-                            )
-                            // Bottom Segment Mask (under mixer info) - Slightly larger (+10px/degrees equivalent)
-                            drawArc(
-                                color = Color.Black,
-                                startAngle = 40f,
-                                sweepAngle = 100f,
-                                useCenter = false
-                            )
-                        }
-                    }
-
-                    TimeText()
-                    val bottomText = when {
-                        selectedMixer != null -> selectedMixer!!.name
-                        discoveredMixers.isEmpty() -> "No mixers found"
-                        else -> null
-                    }
-                    
-                    bottomText?.let { text ->
-                        CurvedLayout(anchor = 90f, angularDirection = CurvedDirection.Angular.CounterClockwise) {
-                            curvedText(
-                                text = text,
-                                style = CurvedTextStyle(
-                                    fontSize = 12.sp,
-                                    color = Color.Gray.copy(alpha = 0.6f)
+                if (animationFinished) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (isHelpScreen && alertMessage == null) {
+                            // Black masks under the curved texts (Segment-cut style) - Only on Help Screen
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                // Top Segment Mask (under clock) - Slightly larger (+10px/degrees equivalent)
+                                drawArc(
+                                    color = Color.Black,
+                                    startAngle = 220f,
+                                    sweepAngle = 100f,
+                                    useCenter = false
                                 )
-                            )
+                                // Bottom Segment Mask (under mixer info) - Slightly larger (+10px/degrees equivalent)
+                                drawArc(
+                                    color = Color.Black,
+                                    startAngle = 40f,
+                                    sweepAngle = 100f,
+                                    useCenter = false
+                                )
+                            }
+                        }
+
+                        TimeText()
+                        val bottomText = when {
+                            selectedMixer != null -> selectedMixer!!.name
+                            discoveredMixers.isEmpty() -> "No mixers found"
+                            else -> null
+                        }
+                        
+                        bottomText?.let { text ->
+                            CurvedLayout(anchor = 90f, angularDirection = CurvedDirection.Angular.CounterClockwise) {
+                                curvedText(
+                                    text = text,
+                                    style = CurvedTextStyle(
+                                        fontSize = 12.sp,
+                                        color = Color.Gray.copy(alpha = 0.6f)
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -158,6 +167,10 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                             onBack = { navController.popBackStack() }
                         )
                     }
+                }
+
+                if (!animationFinished) {
+                    LandingAnimation(onFinished = { animationFinished = true })
                 }
 
                 // Alert Overlay
@@ -212,6 +225,63 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun LandingAnimation(onFinished: () -> Unit) {
+    val animationProgress = remember { Animatable(0f) }
+    
+    LaunchedEffect(Unit) {
+        animationProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 4000, easing = LinearOutSlowInEasing)
+        )
+        onFinished()
+    }
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    ) {
+        val maxRadius = size.maxDimension * 1.5f
+        
+        val redProgress = (animationProgress.value * 1.05f).coerceAtMost(1f)
+        val redRadius = maxRadius * redProgress
+        
+        val holeProgress = ((animationProgress.value - 0.35f) * 1.54f).coerceIn(0f, 1f)
+        val holeRadius = maxRadius * holeProgress
+        
+        val strokeWidth = 6.dp.toPx()
+        val featherWidth = 40.dp.toPx() // Lățimea efectului de feather (fade)
+        
+        // 1. Fundal negru
+        drawRect(color = Color.Black)
+        
+        // 2. Dezvăluirea meniului cu efect de FEATHER (Fade)
+        if (holeRadius > 0f) {
+            // Folosim un gradient radial pentru a crea marginea difuză a "găurii"
+            drawCircle(
+                brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                    colors = listOf(Color.Transparent, Color.Black),
+                    center = center,
+                    radius = (holeRadius + featherWidth).coerceAtLeast(0.1f)
+                ),
+                radius = holeRadius + featherWidth,
+                blendMode = BlendMode.DstIn // Menține ce este în interiorul gradientului (partea transparentă devine gaură)
+            )
+        }
+        
+        // 3. Inelul roșu conducător
+        if (redRadius > 0f && redProgress < 1f) {
+            drawCircle(
+                color = Color.Red,
+                radius = redRadius,
+                style = Stroke(width = strokeWidth),
+                alpha = 1f - redProgress
+            )
         }
     }
 }
