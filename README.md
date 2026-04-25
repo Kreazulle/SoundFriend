@@ -51,6 +51,9 @@ echo "Solo Section" > /dev/udp/[WATCH_IP]/5005
     *   **Long Press**: Return to the settings/setup menu.
     *   **OK Button**: Stop alert vibration and dismiss messages.
 
+> [!WARNING]
+> **Battery Usage**: This application keeps the screen active and network listeners running at all times to ensure instant access to tap-tempo and real-time alerts without any delay or interaction barriers. While this is essential for live performances, it results in significant battery consumption. It is recommended to start with a full charge before your session.
+
 ## 📜 Credits
 
 *   **Copyright**: © MULTIGRAMM Technology
