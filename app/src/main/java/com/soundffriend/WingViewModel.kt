@@ -11,7 +11,6 @@ import kotlinx.coroutines.launch
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.InterfaceAddress
 import java.net.NetworkInterface
 
 data class WingMixer(val name: String, val ip: String)
@@ -66,7 +65,7 @@ class WingViewModel : ViewModel() {
                 try {
                     socket.receive(receivePacket)
                     val response = String(receivePacket.data, 0, receivePacket.length)
-                    val ip = receivePacket.address.hostAddress
+                    val ip = receivePacket.address?.hostAddress ?: "Unknown"
                     
                     // Simple parsing: if response contains /xinfo, it's a Wing/X32
                     if (response.contains("/xinfo")) {
@@ -81,10 +80,10 @@ class WingViewModel : ViewModel() {
                         
                         val mixer = WingMixer(name = "$consoleName @ $ip", ip = ip)
                         if (!_discoveredMixers.value.any { it.ip == ip }) {
-                            _discoveredMixers.value = _discoveredMixers.value + mixer
+                            _discoveredMixers.value += mixer
                         }
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Timeout or other error
                 }
             }
@@ -145,7 +144,7 @@ class WingViewModel : ViewModel() {
                                 }
                             }
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         // Timeout or socket closed
                     }
                 }
@@ -243,7 +242,7 @@ class WingViewModel : ViewModel() {
                     
                     triggerAlertIfMatch(message)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Socket might be closed
             }
         }
@@ -269,12 +268,12 @@ class WingViewModel : ViewModel() {
                             // The string starts after the null padding of the type tag
                             // In OSC, arguments start on 4-byte boundaries. 
                             // This is a simplified extraction for the demo
-                            val message = response.substring(typeTagIndex + 3).trim { it <= ' ' || it == '\u0000' }
+                            val message = response.substring(typeTagIndex + 3).trim { it <= ' ' }
                             triggerAlertIfMatch(message)
                         }
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Socket might be closed
             }
         }
