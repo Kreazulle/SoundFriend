@@ -87,7 +87,7 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
         Scaffold(
             timeText = {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (isHelpScreen) {
+                    if (isHelpScreen && alertMessage == null) {
                         // Black masks under the curved texts (Segment-cut style) - Only on Help Screen
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             // Top Segment Mask (under clock) - Slightly larger (+10px/degrees equivalent)
@@ -173,10 +173,14 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Red.copy(alpha = 0.9f)),
-                        contentAlignment = Alignment.Center
+                            .background(Color.Red.copy(alpha = 0.9f))
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Text(
                                 text = "HELP NEEDED:",
                                 color = Color.White,
@@ -192,15 +196,18 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                                 fontWeight = FontWeight.ExtraBold,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(26.dp))
-                            Button(
-                                onClick = { viewModel.dismissAlert() },
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red),
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Text("OK", fontWeight = FontWeight.Bold)
-                            }
+                        }
+
+                        Button(
+                            onClick = { viewModel.dismissAlert() },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red),
+                            modifier = Modifier
+                                .size(56.dp)
+                                .padding(bottom = 16.dp)
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            Text("OK", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

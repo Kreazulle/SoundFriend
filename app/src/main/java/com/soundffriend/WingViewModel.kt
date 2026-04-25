@@ -281,7 +281,7 @@ class WingViewModel : ViewModel() {
     }
 
     private fun triggerAlertIfMatch(message: String) {
-        if (listOf("Drums", "Bass", "Guitar", "Keys", "Help").any { message.contains(it, ignoreCase = true) }) {
+        if (message.isNotEmpty()) {
             _alertMessage.value = message
         }
     }
