@@ -39,7 +39,9 @@ class WingViewModel : ViewModel() {
             val socket = DatagramSocket()
             socket.broadcast = true
             
-            val message = "/xinfo\u0000\u0000".toByteArray() // Basic OSC /xinfo
+            // Proper OSC /xinfo message: 
+            // "/xinfo" (6 chars) + "\u0000\u0000" (padding to 8 bytes, which is multiple of 4)
+            val message = "/xinfo\u0000\u0000".toByteArray()
             
             // Try to find broadcast addresses
             val broadcastAddresses = getBroadcastAddresses()
