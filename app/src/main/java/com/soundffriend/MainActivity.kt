@@ -442,7 +442,7 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(0.85f)
             ) {
                 Text(text = "OSC (WING):", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Port 10023", fontSize = 14.sp)
+                Text(text = "Ports 10023, 2223", fontSize = 14.sp)
             }
         }
         item {

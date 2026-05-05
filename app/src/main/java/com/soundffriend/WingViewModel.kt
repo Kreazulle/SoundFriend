@@ -39,27 +39,34 @@ class WingViewModel : ViewModel() {
             val socket = DatagramSocket()
             socket.broadcast = true
             
-            // Proper OSC /xinfo message: 
-            // "/xinfo" (6 chars) + "\u0000\u0000" (padding to 8 bytes, which is multiple of 4)
-            val message = "/xinfo\u0000\u0000".toByteArray()
+            // WING native discovery: send "WING?" to UDP port 2222
+            val messageNative = "WING?".toByteArray()
+            // Legacy / Standard OSC discovery: send "/xinfo" to ports 10023 and 2223
+            val messageOsc = "/xinfo\u0000\u0000".toByteArray()
             
-            // Try to find broadcast addresses
             val broadcastAddresses = getBroadcastAddresses()
             
             for (address in broadcastAddresses) {
                 try {
-                    val packet = DatagramPacket(message, message.size, address, 10023)
-                    socket.send(packet)
+                    // 1. Native WING discovery (The modern standard)
+                    val packetNative = DatagramPacket(messageNative, messageNative.size, address, 2222)
+                    socket.send(packetNative)
+                    
+                    // 2. Parallel OSC discovery (For redundancy)
+                    val packet10023 = DatagramPacket(messageOsc, messageOsc.size, address, 10023)
+                    val packet2223 = DatagramPacket(messageOsc, messageOsc.size, address, 2223)
+                    socket.send(packet10023)
+                    socket.send(packet2223)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
 
             // Listen for responses
-            val receiveData = ByteArray(1024)
+            val receiveData = ByteArray(2048)
             val receivePacket = DatagramPacket(receiveData, receiveData.size)
             
-            socket.soTimeout = 2000 // 2 seconds timeout for discovery
+            socket.soTimeout = 2000 
             val startTime = System.currentTimeMillis()
             while (System.currentTimeMillis() - startTime < 3000) {
                 try {
@@ -67,27 +74,27 @@ class WingViewModel : ViewModel() {
                     val response = String(receivePacket.data, 0, receivePacket.length)
                     val ip = receivePacket.address?.hostAddress ?: "Unknown"
                     
-                    // Simple parsing: if response contains /xinfo, it's a Wing/X32
-                    if (response.contains("/xinfo")) {
-                        // OSC string format: /xinfo \u0000~~ [name] [ip] [version] [type]
-                        // We attempt to find the name between the first set of quotes after /xinfo
+                    // Check for Native response: WING,ip,name,model
+                    if (response.startsWith("WING,")) {
+                        val parts = response.split(",")
+                        val name = if (parts.size >= 3) "${parts[2]} @ $ip" else "WING @ $ip"
+                        addMixer(name, ip)
+                    } 
+                    // Check for OSC response: /xinfo ...
+                    else if (response.contains("/xinfo")) {
                         val parts = response.split("\"")
-                        val consoleName = if (parts.size >= 2) {
-                            parts[1] // The first quoted string is usually the name
-                        } else {
-                            "Wing"
-                        }
-                        
-                        val mixer = WingMixer(name = "$consoleName @ $ip", ip = ip)
-                        if (!_discoveredMixers.value.any { it.ip == ip }) {
-                            _discoveredMixers.value += mixer
-                        }
+                        val consoleName = if (parts.size >= 2) parts[1] else "Wing"
+                        addMixer("$consoleName @ $ip", ip)
                     }
-                } catch (_: Exception) {
-                    // Timeout or other error
-                }
+                } catch (_: Exception) { }
             }
             socket.close()
+        }
+    }
+
+    private fun addMixer(name: String, ip: String) {
+        if (!_discoveredMixers.value.any { it.ip == ip }) {
+            _discoveredMixers.value += WingMixer(name = name, ip = ip)
         }
     }
 
@@ -152,8 +159,10 @@ class WingViewModel : ViewModel() {
 
             while (isActive) {
                 try {
-                    val packet = DatagramPacket(message, message.size, address, 10023)
-                    socket.send(packet)
+                    val packet10023 = DatagramPacket(message, message.size, address, 10023)
+                    val packet2223 = DatagramPacket(message, message.size, address, 2223)
+                    socket.send(packet10023)
+                    socket.send(packet2223)
                     // WING requires /xremote every 10 seconds to keep connection alive
                     delay(9000) 
                 } catch (e: Exception) {
@@ -207,8 +216,11 @@ class WingViewModel : ViewModel() {
                 val socket = DatagramSocket()
                 // WING uses /-config/tempo for the master BPM
                 val message = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + floatToByteArray(bpm)
-                val packet = DatagramPacket(message, message.size, InetAddress.getByName(mixer.ip), 10023)
-                socket.send(packet)
+                val address = InetAddress.getByName(mixer.ip)
+                val packet10023 = DatagramPacket(message, message.size, address, 10023)
+                val packet2223 = DatagramPacket(message, message.size, address, 2223)
+                socket.send(packet10023)
+                socket.send(packet2223)
                 socket.close()
             } catch (e: Exception) {
                 e.printStackTrace()

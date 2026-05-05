@@ -26,7 +26,7 @@
 ### Network Ports
 | Protocol | Port | Description |
 | :--- | :--- | :--- |
-| **OSC (WING)** | `10023` | Main communication port for tempo and discovery. |
+| **OSC (WING)** | `10023`, `2223` | Main communication ports for tempo and discovery. |
 | **UDP Alerts** | `5005` | Receives raw text messages for instant display. |
 | **OSC Alerts** | `5006` | Receives OSC formatted messages (`/alert` path). |
 
