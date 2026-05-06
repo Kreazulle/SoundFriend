@@ -34,7 +34,7 @@ class WingViewModel : ViewModel() {
 
 
 
-    private val _isScanning = MutableStateFlow(false)
+    private val _isScanning = MutableStateFlow(value = false)
     val isScanning = _isScanning.asStateFlow()
 
     private var discoveryJob: kotlinx.coroutines.Job? = null
@@ -88,7 +88,7 @@ class WingViewModel : ViewModel() {
         val receiveData = ByteArray(2048)
         val receivePacket = DatagramPacket(receiveData, receiveData.size)
         val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < 2000) {
+        while ((System.currentTimeMillis() - startTime) < 2000) {
             try {
                 socket.receive(receivePacket)
                 val response = String(receivePacket.data, 0, receivePacket.length)
@@ -101,7 +101,7 @@ class WingViewModel : ViewModel() {
                     addMixer(name, ip)
                 } else if (response.contains("/xinfo")) {
                     val parts = response.split(Regex("[^a-zA-Z0-9 _-]"))
-                    val consoleName = parts.firstOrNull { it.length > 2 && it != "xinfo" } ?: "Wing"
+                    val consoleName = parts.firstOrNull { (it.length > 2) && (it != "xinfo") } ?: "Wing"
                     addMixer("$consoleName @ $ip", ip)
                 }
             } catch (_: Exception) { }
@@ -115,7 +115,7 @@ class WingViewModel : ViewModel() {
 
     private suspend fun tryTcpScan() {
         val currentIp = _deviceIp.value
-        if (currentIp == "Unknown" || !currentIp.contains(".")) return
+        if ((currentIp == "Unknown") || !currentIp.contains(".")) return
         
         val prefix = currentIp.substringBeforeLast(".")
         val jobs = mutableListOf<kotlinx.coroutines.Job>()
@@ -141,9 +141,9 @@ class WingViewModel : ViewModel() {
                 } catch (_: Exception) {}
             }
             jobs.add(job)
-            if (i % 20 == 0) delay(10) // Throttle a bit
+            if ((i % 20) == 0) delay(10) // Throttle a bit
         }
-        jobs.forEach { it.join() }
+        kotlinx.coroutines.joinAll(*jobs.toTypedArray())
     }
 
     private fun addMixer(name: String, ip: String) {
@@ -170,7 +170,7 @@ class WingViewModel : ViewModel() {
 
     fun selectMixer(mixer: WingMixer?) {
         _selectedMixer.value = mixer
-        if (mixer != null && mixer.ip != "0.0.0.0") {
+        if ((mixer != null) && (mixer.ip != "0.0.0.0")) {
             // Start listening for OSC messages from this mixer
             listenToMixer(mixer)
         }
@@ -198,10 +198,10 @@ class WingViewModel : ViewModel() {
                         if (response.contains("/config/tempo")) {
                             val path = if (response.contains("/-config/tempo")) "/-config/tempo" else "/config/tempo"
                             val startIndex = response.indexOf(path) + 16 // Path + nulls + ,f + nulls
-                            if (receivePacket.length >= startIndex + 4) {
-                                val bpmBytes = receivePacket.data.sliceArray(startIndex until startIndex + 4)
+                            if (receivePacket.length >= (startIndex + 4)) {
+                                val bpmBytes = receivePacket.data.sliceArray(startIndex until (startIndex + 4))
                                 val receivedBpm = byteArrayToFloat(bpmBytes)
-                                if (receivedBpm in 20f..300f) {
+                                if (receivedBpm in (20f..300f)) {
                                     _bpm.value = receivedBpm
                                 }
                             }
@@ -295,7 +295,7 @@ class WingViewModel : ViewModel() {
             (intBits shr 24).toByte(),
             (intBits shr 16).toByte(),
             (intBits shr 8).toByte(),
-            intBits.toByte()
+            intBits.toByte(),
         )
     }
 
@@ -380,7 +380,7 @@ class WingViewModel : ViewModel() {
                 if (networkInterface.isLoopback || !networkInterface.isUp) continue
                 for (addr in networkInterface.inetAddresses) {
                     val host = addr.hostAddress
-                    if (!addr.isLoopbackAddress && host != null && host.contains(".")) {
+                    if (!addr.isLoopbackAddress && (host != null) && host.contains(".")) {
                         _deviceIp.value = host
                         return@launch
                     }
