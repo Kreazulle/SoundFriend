@@ -1,6 +1,9 @@
 package com.soundffriend
 
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.Brush
 import android.content.Context
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -55,6 +58,17 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Acquire MulticastLock to receive UDP broadcasts for mixer discovery
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val lock = wm.createMulticastLock("SoundFriendLock")
+            lock.setReferenceCounted(true)
+            lock.acquire()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         setContent {
             SoundFriendApp()
         }
@@ -67,6 +81,7 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     val alertMessage by viewModel.alertMessage.collectAsState()
     val selectedMixer by viewModel.selectedMixer.collectAsState()
     val discoveredMixers by viewModel.discoveredMixers.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
     
     var animationFinished by remember { mutableStateOf(false) }
 
@@ -84,6 +99,13 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
             navController.navigate("main") {
                 popUpTo("settings") { inclusive = true }
             }
+        }
+    }
+
+    // Navigate to Settings when discovery finds mixers
+    LaunchedEffect(isScanning, discoveredMixers) {
+        if (!isScanning && discoveredMixers.isNotEmpty() && selectedMixer == null) {
+            navController.navigate("settings")
         }
     }
 
@@ -116,56 +138,58 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                         }
 
                         TimeText()
-                        val bottomText = when {
-                            selectedMixer != null -> selectedMixer!!.name
-                            discoveredMixers.isEmpty() -> "No mixers found"
-                            else -> null
+                        val bottomText = if (selectedMixer != null) {
+                            selectedMixer!!.name
+                        } else {
+                            "NO MIXER"
                         }
                         
-                        bottomText?.let { text ->
-                            CurvedLayout(anchor = 90f, angularDirection = CurvedDirection.Angular.CounterClockwise) {
-                                curvedText(
-                                    text = text,
-                                    style = CurvedTextStyle(
-                                        fontSize = 12.sp,
-                                        color = Color.Gray.copy(alpha = 0.6f)
-                                    )
+                        CurvedLayout(anchor = 90f, angularDirection = CurvedDirection.Angular.CounterClockwise) {
+                            curvedText(
+                                text = bottomText,
+                                style = CurvedTextStyle(
+                                    fontSize = 12.sp,
+                                    color = Color.Gray.copy(alpha = 0.6f)
                                 )
-                            }
+                            )
                         }
                     }
                 }
             }
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                SwipeDismissableNavHost(
-                    navController = navController,
-                    startDestination = if (selectedMixer == null) "settings" else "main"
-                ) {
-                    composable("main") {
-                        MainScreen(
-                            viewModel = viewModel,
-                            onSettingsClick = { navController.navigate("settings") }
-                        )
-                    }
-                    composable("settings") {
-                        SettingsScreen(
-                            viewModel = viewModel,
-                            onBack = { 
-                                // Reset selection if we go back without a valid mixer
-                                if (selectedMixer == null) {
-                                    // Handle no mixer state if needed
-                                }
-                                navController.popBackStack() 
-                            },
-                            onHelpClick = { navController.navigate("help") }
-                        )
-                    }
-                    composable("help") {
-                        HelpScreen(
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() }
-                        )
+                if (isScanning && discoveredMixers.isEmpty()) {
+                    RadarScreen(
+                        onLongPress = {
+                            viewModel.stopDiscovery()
+                        }
+                    )
+                } else {
+                    SwipeDismissableNavHost(
+                        navController = navController,
+                        startDestination = "settings"
+                    ) {
+                        composable("main") {
+                            MainScreen(
+                                viewModel = viewModel,
+                                onSettingsClick = { navController.navigate("settings") }
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                onBack = { 
+                                    navController.popBackStack() 
+                                },
+                                onHelpClick = { navController.navigate("help") }
+                            )
+                        }
+                        composable("help") {
+                            HelpScreen(
+                                viewModel = viewModel,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
 
@@ -347,6 +371,85 @@ fun MainScreen(viewModel: WingViewModel, onSettingsClick: () -> Unit) {
 }
 
 @Composable
+fun RadarScreen(onLongPress: () -> Unit) {
+    val infiniteTransition = rememberInfiniteTransition(label = "RadarTransition")
+    
+    val angle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "RadarAngle"
+    )
+
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "RadarPulse"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { onLongPress() }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(200.dp)) {
+            val center = this.center
+            val radius = size.minDimension / 2
+
+            // Draw concentric circles
+            for (i in 1..3) {
+                drawCircle(
+                    color = Color.Red.copy(alpha = 0.2f * i),
+                    radius = radius * (i / 3f) * pulse,
+                    style = Stroke(width = 2.dp.toPx())
+                )
+                drawCircle(
+                    color = Color.Red.copy(alpha = 0.15f),
+                    radius = radius * (i / 3f),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+
+            // Draw radar sweep
+            rotate(angle) {
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        0f to Color.Transparent,
+                        0.5f to Color.Red.copy(alpha = 0.5f),
+                        1f to Color.Red,
+                        center = center
+                    ),
+                    startAngle = 0f,
+                    sweepAngle = 90f,
+                    useCenter = true,
+                    topLeft = center - androidx.compose.ui.geometry.Offset(radius, radius),
+                    size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+                )
+            }
+            
+            // Draw center point
+            drawCircle(
+                color = Color.Red,
+                radius = 4.dp.toPx()
+            )
+        }
+    }
+}
+
+@Composable
 fun SettingsScreen(viewModel: WingViewModel, onBack: () -> Unit, onHelpClick: () -> Unit) {
     val mixers by viewModel.discoveredMixers.collectAsState()
 
@@ -369,14 +472,14 @@ fun SettingsScreen(viewModel: WingViewModel, onBack: () -> Unit, onHelpClick: ()
                     }
                     Button(
                         onClick = { 
-                            viewModel.selectMixer(WingMixer("No Mixer", "0.0.0.0"))
+                            viewModel.selectMixer(WingMixer("NO MIXER", "0.0.0.0"))
                         },
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(backgroundColor = Color.Yellow, contentColor = Color.Black),
                         modifier = Modifier.size(44.dp)
                     ) {
                         Text(
-                            text = "No\nMixer", 
+                            text = "NO\nMIXER",
                             fontSize = 9.sp, 
                             lineHeight = 10.sp,
                             fontWeight = FontWeight.Bold,

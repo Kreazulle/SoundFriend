@@ -2,6 +2,12 @@
 
 **Sound Friend** is a professional Wear OS companion application designed for musicians and sound engineers. It provides seamless integration with **Behringer WING** mixing consoles, allowing real-time tempo synchronization and instant remote communication directly from your wrist.
 
+## 🎯 Purpose & Philosophy
+
+Traditional mixing on a physical console allows a sound engineer to keep their eyes fixed on the stage, relying on tactile feedback to adjust faders and knobs. However, the shift towards tablet-based mixing has introduced a significant challenge: the touch interface demands constant visual attention, pulling the engineer's focus away from the performers.
+
+In this environment, communication between the stage and the engineer becomes slow and cumbersome. **Sound Friend** was created to bridge this gap. By moving critical communication and tempo control to a wearable device, it restores the engineer's ability to stay connected with the scene, providing an efficient and non-intrusive way to handle stage requests and technical synchronization.
+
 ## 🚀 Key Features
 
 *   **Bidirectional BPM Sync**: 

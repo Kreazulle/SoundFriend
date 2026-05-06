@@ -34,62 +34,116 @@ class WingViewModel : ViewModel() {
 
 
 
-    fun startDiscovery() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val socket = DatagramSocket()
-            socket.broadcast = true
-            
-            // WING native discovery: send "WING?" to UDP port 2222
-            val messageNative = "WING?".toByteArray()
-            // Legacy / Standard OSC discovery: send "/xinfo" to ports 10023 and 2223
-            val messageOsc = "/xinfo\u0000\u0000".toByteArray()
-            
-            val broadcastAddresses = getBroadcastAddresses()
-            
-            for (address in broadcastAddresses) {
-                try {
-                    // 1. Native WING discovery (The modern standard)
-                    val packetNative = DatagramPacket(messageNative, messageNative.size, address, 2222)
-                    socket.send(packetNative)
-                    
-                    // 2. Parallel OSC discovery (For redundancy)
-                    val packet10023 = DatagramPacket(messageOsc, messageOsc.size, address, 10023)
-                    val packet2223 = DatagramPacket(messageOsc, messageOsc.size, address, 2223)
-                    socket.send(packet10023)
-                    socket.send(packet2223)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning = _isScanning.asStateFlow()
 
-            // Listen for responses
-            val receiveData = ByteArray(2048)
-            val receivePacket = DatagramPacket(receiveData, receiveData.size)
-            
-            socket.soTimeout = 2000 
-            val startTime = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startTime < 3000) {
-                try {
-                    socket.receive(receivePacket)
-                    val response = String(receivePacket.data, 0, receivePacket.length)
-                    val ip = receivePacket.address?.hostAddress ?: "Unknown"
-                    
-                    // Check for Native response: WING,ip,name,model
-                    if (response.startsWith("WING,")) {
-                        val parts = response.split(",")
-                        val name = if (parts.size >= 3) "${parts[2]} @ $ip" else "WING @ $ip"
-                        addMixer(name, ip)
-                    } 
-                    // Check for OSC response: /xinfo ...
-                    else if (response.contains("/xinfo")) {
-                        val parts = response.split("\"")
-                        val consoleName = if (parts.size >= 2) parts[1] else "Wing"
-                        addMixer("$consoleName @ $ip", ip)
-                    }
-                } catch (_: Exception) { }
+    private var discoveryJob: kotlinx.coroutines.Job? = null
+
+    fun stopDiscovery() {
+        _isScanning.value = false
+        discoveryJob?.cancel()
+    }
+
+    fun startDiscovery() {
+        if (_isScanning.value) return
+        _isScanning.value = true
+        _discoveredMixers.value = emptyList()
+
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive && _isScanning.value) {
+                performDiscoveryCycle()
+                if (_discoveredMixers.value.isNotEmpty()) {
+                    _isScanning.value = false
+                    break
+                }
+                delay(2000)
             }
-            socket.close()
         }
+    }
+
+    private suspend fun performDiscoveryCycle() {
+        val socket = DatagramSocket()
+        socket.broadcast = true
+        socket.soTimeout = 1000
+        
+        val messageNative = "WING?".toByteArray()
+        val messageNativeV3 = "WING?72".toByteArray()
+        val messageOsc = "/xinfo\u0000\u0000".toByteArray()
+        
+        val broadcastAddresses = getBroadcastAddresses().toMutableList()
+        try {
+            broadcastAddresses.add(InetAddress.getByName("255.255.255.255"))
+        } catch (_: Exception) {}
+        
+        for (address in broadcastAddresses) {
+            try {
+                socket.send(DatagramPacket(messageNative, messageNative.size, address, 2222))
+                socket.send(DatagramPacket(messageNativeV3, messageNativeV3.size, address, 2222))
+                socket.send(DatagramPacket(messageOsc, messageOsc.size, address, 2223))
+                socket.send(DatagramPacket(messageOsc, messageOsc.size, address, 10023))
+            } catch (_: Exception) {}
+        }
+
+        val receiveData = ByteArray(2048)
+        val receivePacket = DatagramPacket(receiveData, receiveData.size)
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 2000) {
+            try {
+                socket.receive(receivePacket)
+                val response = String(receivePacket.data, 0, receivePacket.length)
+                val ip = receivePacket.address?.hostAddress ?: "Unknown"
+                
+                if (response.contains("WING,")) {
+                    val startIndex = response.indexOf("WING,")
+                    val parts = response.substring(startIndex).split(",")
+                    val name = if (parts.size >= 3) "${parts[2]} @ $ip" else "WING @ $ip"
+                    addMixer(name, ip)
+                } else if (response.contains("/xinfo")) {
+                    val parts = response.split(Regex("[^a-zA-Z0-9 _-]"))
+                    val consoleName = parts.firstOrNull { it.length > 2 && it != "xinfo" } ?: "Wing"
+                    addMixer("$consoleName @ $ip", ip)
+                }
+            } catch (_: Exception) { }
+        }
+        socket.close()
+        
+        if (_discoveredMixers.value.isEmpty()) {
+            tryTcpScan()
+        }
+    }
+
+    private suspend fun tryTcpScan() {
+        val currentIp = _deviceIp.value
+        if (currentIp == "Unknown" || !currentIp.contains(".")) return
+        
+        val prefix = currentIp.substringBeforeLast(".")
+        val jobs = mutableListOf<kotlinx.coroutines.Job>()
+        
+        for (i in 1..254) {
+            val targetIp = "$prefix.$i"
+            if (targetIp == currentIp) continue
+            
+            val job = viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val socket = java.net.Socket()
+                    socket.connect(java.net.InetSocketAddress(targetIp, 2222), 150)
+                    socket.getOutputStream().write("WING?".toByteArray())
+                    val buffer = ByteArray(1024)
+                    val read = socket.getInputStream().read(buffer)
+                    if (read > 0) {
+                        val response = String(buffer, 0, read)
+                        if (response.contains("WING,")) {
+                            addMixer("WING (TCP) @ $targetIp", targetIp)
+                        }
+                    }
+                    socket.close()
+                } catch (_: Exception) {}
+            }
+            jobs.add(job)
+            if (i % 20 == 0) delay(10) // Throttle a bit
+        }
+        jobs.forEach { it.join() }
     }
 
     private fun addMixer(name: String, ip: String) {
@@ -140,9 +194,10 @@ class WingViewModel : ViewModel() {
                         socket.receive(receivePacket)
                         val response = String(receivePacket.data, 0, receivePacket.length)
                         
-                        // Look for BPM updates: /-config/tempo followed by float bytes
-                        if (response.contains("/-config/tempo")) {
-                            val startIndex = response.indexOf("/-config/tempo") + 16 // Path + nulls + ,f + nulls
+                        // Look for BPM updates: /-config/tempo or /config/tempo followed by float bytes
+                        if (response.contains("/config/tempo")) {
+                            val path = if (response.contains("/-config/tempo")) "/-config/tempo" else "/config/tempo"
+                            val startIndex = response.indexOf(path) + 16 // Path + nulls + ,f + nulls
                             if (receivePacket.length >= startIndex + 4) {
                                 val bpmBytes = receivePacket.data.sliceArray(startIndex until startIndex + 4)
                                 val receivedBpm = byteArrayToFloat(bpmBytes)
@@ -214,13 +269,19 @@ class WingViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val socket = DatagramSocket()
-                // WING uses /-config/tempo for the master BPM
-                val message = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + floatToByteArray(bpm)
                 val address = InetAddress.getByName(mixer.ip)
-                val packet10023 = DatagramPacket(message, message.size, address, 10023)
-                val packet2223 = DatagramPacket(message, message.size, address, 2223)
-                socket.send(packet10023)
-                socket.send(packet2223)
+                val bpmBytes = floatToByteArray(bpm)
+                
+                // WING uses /config/tempo for the master BPM
+                val msgWing = "/config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
+                // Legacy X32 uses /-config/tempo
+                val msgX32 = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
+                
+                val ports = listOf(2223, 10023)
+                for (port in ports) {
+                    socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
+                    socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
+                }
                 socket.close()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -307,7 +368,6 @@ class WingViewModel : ViewModel() {
     val deviceIp = _deviceIp.asStateFlow()
 
     init {
-        startDiscovery()
         listenForAlerts()
         updateDeviceIp()
     }
