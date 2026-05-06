@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     val navController = rememberSwipeDismissableNavController()
-    val alertMessage by viewModel.alertMessage.collectAsState()
+    val notification by viewModel.notification.collectAsState()
     val selectedMixer by viewModel.selectedMixer.collectAsState()
     val discoveredMixers by viewModel.discoveredMixers.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
@@ -87,8 +87,8 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
 
     // Trigger vibration when alert arrives
     val context = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(alertMessage) {
-        if (alertMessage != null) {
+    LaunchedEffect(notification) {
+        if (notification != null) {
             vibrate(context)
         }
     }
@@ -117,7 +117,7 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
             timeText = {
                 if (animationFinished) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        if (isHelpScreen && alertMessage == null) {
+                        if (isHelpScreen && (notification == null)) {
                             // Black masks under the curved texts (Segment-cut style) - Only on Help Screen
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 // Top Segment Mask (under clock) - Slightly larger (+10px/degrees equivalent)
@@ -197,9 +197,9 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                     LandingAnimation(onFinished = { animationFinished = true })
                 }
 
-                // Alert Overlay
-                alertMessage?.let { message ->
-                    LaunchedEffect(message) {
+                // Notification Overlay
+                notification?.let { notif ->
+                    LaunchedEffect(notif) {
                         val pulseDuration = 1000L // 60 BPM = 1 pulse per second
                         while (true) {
                             vibrate(context, 200) // Pulse vibration
@@ -207,44 +207,81 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Red.copy(alpha = 0.9f))
-                    ) {
-                        Column(
+                    if (notif.type == NotificationType.ALERT) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth(0.9f)
-                                .align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .fillMaxSize()
+                                .background(Color.Red.copy(alpha = 0.9f))
                         ) {
-                            Text(
-                                text = "HELP NEEDED:",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = message,
-                                color = Color.White,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .align(Alignment.Center),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "HELP NEEDED:",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = notif.text,
+                                    color = Color.White,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
 
-                        Button(
-                            onClick = { viewModel.dismissAlert() },
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red),
+                            Button(
+                                onClick = { viewModel.dismissAlert() },
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Red),
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .padding(bottom = 16.dp)
+                                    .align(Alignment.BottomCenter)
+                            ) {
+                                Text("OK", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // INFO Message - Blue background, scrollable, OK at the end
+                        Box(
                             modifier = Modifier
-                                .size(56.dp)
-                                .padding(bottom = 16.dp)
-                                .align(Alignment.BottomCenter)
+                                .fillMaxSize()
+                                .background(Color.Blue.copy(alpha = 0.9f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("OK", fontWeight = FontWeight.Bold)
+                            ScalingLazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+                            ) {
+                                item {
+                                    Text(
+                                        text = notif.text,
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)
+                                    )
+                                }
+                                item {
+                                    Button(
+                                        onClick = { viewModel.dismissAlert() },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, contentColor = Color.Blue),
+                                        modifier = Modifier.size(56.dp)
+                                    ) {
+                                        Text("OK", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -596,8 +633,22 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
             ) {
                 Text(text = "Trigger Alert (OSC):", fontSize = 12.sp, color = Color.LightGray)
                 Text(text = "Port: 5006", fontSize = 10.sp, color = Color.Cyan)
-                Text(text = "Address: /alert", fontSize = 10.sp, color = Color.Cyan)
+                Text(text = "Address: /SoundFriend/alerts", fontSize = 10.sp, color = Color.Cyan)
                 Text(text = "Value: \"Keys Help\"", fontSize = 10.sp, color = Color.Cyan, textAlign = TextAlign.Center)
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        item {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                Text(text = "Trigger Msg (OSC):", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Port: 5006", fontSize = 10.sp, color = Color.Cyan)
+                Text(text = "Address: /SoundFriend/messages", fontSize = 10.sp, color = Color.Cyan)
+                Text(text = "Value: \"Setlist: Song 1, ...\"", fontSize = 10.sp, color = Color.Cyan, textAlign = TextAlign.Center)
             }
         }
         item {

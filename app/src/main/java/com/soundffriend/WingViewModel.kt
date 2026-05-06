@@ -15,6 +15,9 @@ import java.net.NetworkInterface
 
 data class WingMixer(val name: String, val ip: String)
 
+enum class NotificationType { ALERT, INFO }
+data class Notification(val text: String, val type: NotificationType)
+
 class WingViewModel : ViewModel() {
     private val _discoveredMixers = MutableStateFlow<List<WingMixer>>(emptyList())
     val discoveredMixers = _discoveredMixers.asStateFlow()
@@ -25,11 +28,11 @@ class WingViewModel : ViewModel() {
     private val _bpm = MutableStateFlow(120f)
     val bpm = _bpm.asStateFlow()
 
-    private val _alertMessage = MutableStateFlow<String?>(null)
-    val alertMessage = _alertMessage.asStateFlow()
+    private val _notification = MutableStateFlow<Notification?>(null)
+    val notification = _notification.asStateFlow()
 
     fun dismissAlert() {
-        _alertMessage.value = null
+        _notification.value = null
     }
 
 
@@ -313,7 +316,7 @@ class WingViewModel : ViewModel() {
                     alertSocket?.receive(packet)
                     val message = String(packet.data, 0, packet.length).trim()
                     
-                    triggerAlertIfMatch(message)
+                    triggerAlertIfMatch(message, NotificationType.ALERT)
                 }
             } catch (_: Exception) {
                 // Socket might be closed
@@ -324,25 +327,26 @@ class WingViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 oscAlertSocket = DatagramSocket(5006)
-                val buffer = ByteArray(1024)
+                val buffer = ByteArray(2048)
                 while (true) {
                     val packet = DatagramPacket(buffer, buffer.size)
                     oscAlertSocket?.receive(packet)
                     
-                    // Simple OSC parsing for string message
-                    // Format: /alert\u0000,s\u0000[string]
-                    val data = packet.data
-                    val response = String(data, 0, packet.length)
+                    val response = String(packet.data, 0, packet.length)
                     
-                    if (response.startsWith("/alert")) {
-                        // Find the start of the string argument (after the type tag ',s')
+                    val type = when {
+                        response.startsWith("/SoundFriend/alerts") -> NotificationType.ALERT
+                        response.startsWith("/SoundFriend/messages") -> NotificationType.INFO
+                        else -> null
+                    }
+
+                    if (type != null) {
                         val typeTagIndex = response.indexOf(",s")
                         if (typeTagIndex != -1) {
-                            // The string starts after the null padding of the type tag
-                            // In OSC, arguments start on 4-byte boundaries. 
-                            // This is a simplified extraction for the demo
+                            // Extract string after the type tag
+                            // Simple extraction for the protocol demo
                             val message = response.substring(typeTagIndex + 3).trim { it <= ' ' }
-                            triggerAlertIfMatch(message)
+                            triggerAlertIfMatch(message, type)
                         }
                     }
                 }
@@ -352,9 +356,9 @@ class WingViewModel : ViewModel() {
         }
     }
 
-    private fun triggerAlertIfMatch(message: String) {
+    private fun triggerAlertIfMatch(message: String, type: NotificationType) {
         if (message.isNotEmpty()) {
-            _alertMessage.value = message
+            _notification.value = Notification(message, type)
         }
     }
 

@@ -17,7 +17,8 @@ In this environment, communication between the stage and the engineer becomes sl
 *   **Remote Alert System**:
     *   Receive urgent text notifications from the FOH or stage team.
     *   Supports raw **UDP (Port 5005)** and **OSC (Port 5006)** protocols.
-    *   Alerts trigger a persistent **60 BPM rhythmic vibration** until manually acknowledged.
+    *   **Urgent Alerts** (`/SoundFriend/alerts`): Trigger a persistent **60 BPM rhythmic vibration** and a red "HELP NEEDED" overlay until manually acknowledged.
+    *   **Info Messages** (`/SoundFriend/messages`): Display long messages on a blue scrollable overlay, also with rhythmic vibration until dismissed.
 *   **Smart Connectivity**:
     *   Automatic console discovery using the `/xinfo` protocol.
     *   **"No Mixer" Mode**: Use the app as a standalone communication tool (alerts and manual BPM) without a console connection.
@@ -33,20 +34,29 @@ In this environment, communication between the stage and the engineer becomes sl
 | Protocol | Port | Description |
 | :--- | :--- | :--- |
 | **OSC (WING)** | `10023`, `2223` | Main communication ports for tempo and discovery. |
-| **UDP Alerts** | `5005` | Receives raw text messages for instant display. |
-| **OSC Alerts** | `5006` | Receives OSC formatted messages (`/alert` path). |
+| **UDP Alerts** | `5005` | Receives raw text messages for urgent display (Type: ALERT). |
+| **OSC Alerts** | `5006` | Receives OSC formatted messages. |
+
+### OSC Notification Paths
+| Path | Type | Background | Header |
+| :--- | :--- | :--- | :--- |
+| `/SoundFriend/alerts` | Urgent Alert | Red | "HELP NEEDED:" |
+| `/SoundFriend/messages` | Info Message | Blue | (None) |
 
 ### Alert Trigger Examples
 
 **Via UDP (Terminal):**
 ```bash
-echo "Solo Section" > /dev/udp/[WATCH_IP]/5005
+echo "Drums Help" > /dev/udp/[WATCH_IP]/5005
 ```
 
 **Via OSC:**
 *   **Port**: `5006`
-*   **Address**: `/alert`
-*   **Value (String)**: `"Backing Track Stop"`
+*   **Path**: `/SoundFriend/alerts`
+*   **Value (String)**: `"Guitar String Broken"`
+
+*   **Path**: `/SoundFriend/messages`
+*   **Value (String)**: `"New Setlist: 1. Start, 2. Middle, 3. End"`
 
 ## 📖 How to Use
 
