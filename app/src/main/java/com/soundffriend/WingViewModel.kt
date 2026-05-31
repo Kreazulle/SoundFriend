@@ -261,39 +261,49 @@ class WingViewModel : ViewModel() {
 
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
+    private var mainSocket: DatagramSocket? = null
+
+    private fun getSocket(): DatagramSocket {
+        if (mainSocket == null || mainSocket!!.isClosed) {
+            mainSocket = DatagramSocket().apply {
+                broadcast = true
+                soTimeout = 0 // Non-blocking for persistent listener
+            }
+        }
+        return mainSocket!!
+    }
+
     private fun listenToMixer(mixer: WingMixer) {
         heartbeatJob?.cancel()
         heartbeatJob = viewModelScope.launch(Dispatchers.IO) {
-            val socket = DatagramSocket()
+            val socket = getSocket()
             val message = "/xremote\u0000\u0000\u0000\u0000".toByteArray()
             val address = InetAddress.getByName(mixer.ip)
             
             // Start a separate job to listen for responses
             val listenerJob = launch {
-                val receiveData = ByteArray(1024)
+                val receiveData = ByteArray(2048)
                 val receivePacket = DatagramPacket(receiveData, receiveData.size)
                 while (isActive) {
                     try {
                         socket.receive(receivePacket)
                         val data = receivePacket.data
                         
-                        // Robust OSC Path extraction (up to first null)
-                        val nullIndex = data.indexOf(0.toByte())
-                        if (nullIndex == -1) continue
-                        val path = String(data, 0, nullIndex)
-                        
-                        // Only process if it's a tempo path we care about
-                        if (path == "/config/tempo" || path == "/-config/tempo" || (path.startsWith("/fx/") && path.endsWith("/par/1"))) {
-                            val commaIndex = data.indexOf(','.toByte())
-                            if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
-                                if (data[commaIndex + 1] == 'f'.toByte()) {
-                                    val floatStartIndex = ((commaIndex + 4) / 4) * 4
-                                    if (floatStartIndex + 4 <= receivePacket.length) {
-                                        val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
-                                        val receivedBpm = byteArrayToFloat(bpmBytes)
-                                        if (receivedBpm in (20f..300f)) {
-                                            _bpm.value = receivedBpm
-                                        }
+                        // Look for the type tag comma
+                        val commaIndex = data.indexOf(','.toByte())
+                        if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
+                            if (data[commaIndex + 1] == 'f'.toByte()) {
+                                // Align to 4-byte boundary for the float value
+                                val floatStartIndex = ((commaIndex + 4) / 4) * 4
+                                if (floatStartIndex + 4 <= receivePacket.length) {
+                                    val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
+                                    val value = byteArrayToFloat(bpmBytes)
+                                    
+                                    // If value is > 20, it's likely BPM. If < 5, it's likely Time (Seconds)
+                                    val receivedBpm = if (value < 5f && value > 0.1f) (60f / value) else value
+                                    
+                                    if (receivedBpm in (20f..300f)) {
+                                        _bpm.value = receivedBpm
                                     }
                                 }
                             }
@@ -304,19 +314,16 @@ class WingViewModel : ViewModel() {
 
             while (isActive) {
                 try {
-                    val packet10023 = DatagramPacket(message, message.size, address, 10023)
                     val packet2223 = DatagramPacket(message, message.size, address, 2223)
-                    socket.send(packet10023)
+                    val packet10023 = DatagramPacket(message, message.size, address, 10023)
                     socket.send(packet2223)
-                    // WING requires /xremote every 10 seconds to keep connection alive
-                    delay(9000) 
+                    socket.send(packet10023)
+                    delay(8000) // WING requires /xremote every 10s
                 } catch (e: Exception) {
-                    e.printStackTrace()
                     delay(5000)
                 }
             }
             listenerJob.cancel()
-            socket.close()
         }
     }
 
@@ -332,25 +339,27 @@ class WingViewModel : ViewModel() {
 
     fun tapTempo() {
         val now = System.currentTimeMillis()
-        tapTimestamps.add(now)
-        if (tapTimestamps.size > 2) {
-            tapTimestamps.removeAt(0)
+        
+        // If last tap was more than 2.5 seconds ago, start a new sequence
+        if (tapTimestamps.isNotEmpty() && (now - tapTimestamps.last() > 2500)) {
+            tapTimestamps.clear()
         }
         
-        if (tapTimestamps.size == 2) {
-            val interval = tapTimestamps[1] - tapTimestamps[0]
-            
-            // Filter out intervals that are too long (e.g. > 2 seconds / < 30 BPM)
-            if (interval < 2000) {
-                _bpm.value = (60000f / interval)
-                
-                // Send BPM to Wing if connected
-                sendBpmToWing(_bpm.value)
-            } else {
-                // If interval was too long, treat this tap as a new first tap
-                tapTimestamps.removeAt(0)
+        tapTimestamps.add(now)
+        // Keep last 4 taps for a stable average, but react from the 2nd tap
+        if (tapTimestamps.size > 4) tapTimestamps.removeAt(0)
+        
+        if (tapTimestamps.size >= 2) {
+            val totalInterval = tapTimestamps.last() - tapTimestamps.first()
+            val averageInterval = totalInterval.toFloat() / (tapTimestamps.size - 1)
+            val newBpm = 60000f / averageInterval
+            if (newBpm in (20f..350f)) {
+                _bpm.value = newBpm
             }
         }
+        
+        // ALWAYS emit OSC command on every single tap
+        sendBpmToWing(_bpm.value)
     }
 
     private fun sendBpmToWing(bpm: Float) {
@@ -359,19 +368,21 @@ class WingViewModel : ViewModel() {
         
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val socket = DatagramSocket()
+                val socket = getSocket()
                 val address = InetAddress.getByName(mixer.ip)
-                val ports = listOf(2223, 10023)
                 
-                // 1. Prepare messages using the robust OSC helper
+                // 1. Prepare Master Tempo Messages (BPM value)
                 val msgWing = createOscMessage("/config/tempo", bpm)
                 val msgX32 = createOscMessage("/-config/tempo", bpm)
                 
+                // 2. Prepare FX Slot Message (Time value in Seconds)
+                val timeSeconds = 60f / bpm.coerceAtLeast(1f)
                 val msgFx = _selectedFxSlot.value?.let { fx ->
-                    createOscMessage("/fx/${fx.id}/par/1", bpm)
+                    createOscMessage("/fx/${fx.id}/par/1", timeSeconds)
                 }
 
-                // 2. Send to all relevant ports
+                // 3. Send to all relevant ports using the shared socket
+                val ports = listOf(2223, 10023)
                 for (port in ports) {
                     socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
                     socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
@@ -379,7 +390,6 @@ class WingViewModel : ViewModel() {
                         socket.send(DatagramPacket(it, it.size, address, port))
                     }
                 }
-                socket.close()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -473,6 +483,7 @@ class WingViewModel : ViewModel() {
         super.onCleared()
         alertSocket?.close()
         oscAlertSocket?.close()
+        mainSocket?.close()
     }
 
     private val _deviceIp = MutableStateFlow("Unknown")

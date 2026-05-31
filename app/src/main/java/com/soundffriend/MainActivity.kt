@@ -406,7 +406,6 @@ fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () 
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { 
-                        vibrate(context, 50)
                         viewModel.tapTempo() 
                     },
                     onLongPress = { 
