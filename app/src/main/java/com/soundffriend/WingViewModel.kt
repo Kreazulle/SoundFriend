@@ -15,6 +15,8 @@ import java.net.NetworkInterface
 
 data class WingMixer(val name: String, val ip: String)
 
+data class FxSlot(val id: Int, val model: String, val hasTempo: Boolean)
+
 enum class NotificationType { ALERT, INFO }
 data class Notification(val text: String, val type: NotificationType)
 
@@ -27,6 +29,12 @@ class WingViewModel : ViewModel() {
 
     private val _bpm = MutableStateFlow(120f)
     val bpm = _bpm.asStateFlow()
+
+    private val _fxSlots = MutableStateFlow<List<FxSlot>>(emptyList())
+    val fxSlots = _fxSlots.asStateFlow()
+
+    private val _selectedFxSlot = MutableStateFlow<FxSlot?>(null)
+    val selectedFxSlot = _selectedFxSlot.asStateFlow()
 
     private val _notification = MutableStateFlow<Notification?>(null)
     val notification = _notification.asStateFlow()
@@ -173,10 +181,82 @@ class WingViewModel : ViewModel() {
 
     fun selectMixer(mixer: WingMixer?) {
         _selectedMixer.value = mixer
+        _fxSlots.value = emptyList()
+        _selectedFxSlot.value = null
+        
         if ((mixer != null) && (mixer.ip != "0.0.0.0")) {
             // Start listening for OSC messages from this mixer
             listenToMixer(mixer)
+            // Query for FX slots that support tempo
+            queryFxSlots(mixer)
         }
+    }
+
+    private fun queryFxSlots(mixer: WingMixer) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val socket = DatagramSocket()
+                val address = InetAddress.getByName(mixer.ip)
+                
+                // Query all 16 FX slots for their model names
+                for (i in 1..16) {
+                    val path = "/fx/$i/mdl"
+                    // OSC String padding: must be null-terminated and total length % 4 == 0
+                    val nullsNeeded = 4 - (path.length % 4)
+                    val msg = path.toByteArray() + ByteArray(nullsNeeded)
+                    
+                    socket.send(DatagramPacket(msg, msg.size, address, 2223))
+                    socket.send(DatagramPacket(msg, msg.size, address, 10023))
+                }
+                
+                val buffer = ByteArray(2048)
+                val packet = DatagramPacket(buffer, buffer.size)
+                socket.soTimeout = 1000
+                
+                val newSlots = mutableListOf<FxSlot>()
+                val startTime = System.currentTimeMillis()
+                while ((System.currentTimeMillis() - startTime) < 2000) {
+                    try {
+                        socket.receive(packet)
+                        val dataString = String(packet.data, 0, packet.length)
+                        
+                        if (dataString.contains("/fx/") && dataString.contains("/mdl")) {
+                            val slotId = dataString.substringAfter("/fx/").substringBefore("/").toIntOrNull() ?: continue
+                            
+                            // OSC response format: [path]\0[padding],s\0[padding][value]\0
+                            // We look for the model name after the ",s" tag
+                            val typeTagIndex = dataString.indexOf(",s")
+                            if (typeTagIndex != -1) {
+                                // The string value usually starts 4 bytes after the start of ",s" tag (aligned)
+                                val valueIndex = (typeTagIndex + 4) / 4 * 4
+                                if (valueIndex < packet.length) {
+                                    val modelName = String(packet.data, valueIndex, packet.length - valueIndex)
+                                        .trim { it <= ' ' || it.toInt() == 0 }
+                                    
+                                    if (modelName.isNotEmpty() && modelName != "NONE") {
+                                        val isTempoFx = modelName.contains("DELAY", ignoreCase = true) || 
+                                                       modelName.contains("TAP", ignoreCase = true) ||
+                                                       modelName.contains("ECHO", ignoreCase = true)
+                                        
+                                        if (isTempoFx && !newSlots.any { it.id == slotId }) {
+                                            newSlots.add(FxSlot(slotId, modelName, true))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                _fxSlots.value = newSlots.sortedBy { it.id }
+                socket.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun selectFxSlot(slot: FxSlot?) {
+        _selectedFxSlot.value = slot
     }
 
     private var heartbeatJob: kotlinx.coroutines.Job? = null
@@ -269,22 +349,30 @@ class WingViewModel : ViewModel() {
     private fun sendBpmToWing(bpm: Float) {
         val mixer = _selectedMixer.value ?: return
         if (mixer.ip == "0.0.0.0") return // Skip network OSC in "No Mixer" mode
+        
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(mixer.ip)
                 val bpmBytes = floatToByteArray(bpm)
                 
-                // WING uses /config/tempo for the master BPM
+                // 1. Send to Global Tempo (Config)
                 val msgWing = "/config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
-                // Legacy X32 uses /-config/tempo
                 val msgX32 = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
                 
-                val ports = listOf(2223, 10023)
-                for (port in ports) {
-                    socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
-                    socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
+                socket.send(DatagramPacket(msgWing, msgWing.size, address, 2223))
+                socket.send(DatagramPacket(msgX32, msgX32.size, address, 10023))
+
+                _selectedFxSlot.value?.let { fx ->
+                    // For WING, fx time/tempo is usually parameter 1
+                    val path = "/fx/${fx.id}/par/1"
+                    val nullsNeeded = 4 - (path.length % 4)
+                    val msgPath = path.toByteArray() + ByteArray(nullsNeeded)
+                    
+                    val msgFx = msgPath + ",f\u0000\u0000".toByteArray() + bpmBytes
+                    socket.send(DatagramPacket(msgFx, msgFx.size, address, 2223))
                 }
+
                 socket.close()
             } catch (e: Exception) {
                 e.printStackTrace()
