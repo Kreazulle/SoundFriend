@@ -379,8 +379,8 @@ class WingViewModel : ViewModel() {
                 // WING Rule: Float > 1.0 is interpreted as milliseconds.
                 val timeMs = 60000f / bpm.coerceAtLeast(1f)
                 val msgFx = _selectedFxSlot.value?.let { fx ->
-                    // Use /fx/slot/n/par/1 for maximum compatibility with FW 3.0.6 JSON structure
-                    createOscMessage("/fx/slot/${fx.id}/par/1", timeMs)
+                    // New Format: /fx/[slot]/[parameter]
+                    createOscMessage("/fx/${fx.id}/1", timeMs)
                 }
 
                 // 3. Send to all relevant ports using the shared socket
