@@ -275,17 +275,25 @@ class WingViewModel : ViewModel() {
                 while (isActive) {
                     try {
                         socket.receive(receivePacket)
-                        val response = String(receivePacket.data, 0, receivePacket.length)
                         
-                        // Look for BPM updates: /-config/tempo or /config/tempo followed by float bytes
-                        if (response.contains("/config/tempo")) {
-                            val path = if (response.contains("/-config/tempo")) "/-config/tempo" else "/config/tempo"
-                            val startIndex = response.indexOf(path) + 16 // Path + nulls + ,f + nulls
-                            if (receivePacket.length >= (startIndex + 4)) {
-                                val bpmBytes = receivePacket.data.sliceArray(startIndex until (startIndex + 4))
-                                val receivedBpm = byteArrayToFloat(bpmBytes)
-                                if (receivedBpm in (20f..300f)) {
-                                    _bpm.value = receivedBpm
+                        // OSC Robust Parsing: Find the type tag comma
+                        val data = receivePacket.data
+                        val commaIndex = data.indexOf(','.toByte())
+                        
+                        // Check if it's a float message (,f)
+                        if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
+                            if (data[commaIndex + 1] == 'f'.toByte()) {
+                                // The float value starts at the next 4-byte boundary after the type tag string
+                                // Type tag string is usually ",f\u0000\u0000" (4 bytes)
+                                val floatStartIndex = commaIndex + 4
+                                
+                                if (floatStartIndex + 4 <= receivePacket.length) {
+                                    val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
+                                    val receivedBpm = byteArrayToFloat(bpmBytes)
+                                    
+                                    if (receivedBpm in (20f..300f)) {
+                                        _bpm.value = receivedBpm
+                                    }
                                 }
                             }
                         }
@@ -355,24 +363,28 @@ class WingViewModel : ViewModel() {
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(mixer.ip)
                 val bpmBytes = floatToByteArray(bpm)
+                val ports = listOf(2223, 10023)
                 
-                // 1. Send to Global Tempo (Config)
+                // 1. Prepare Global Tempo Messages
                 val msgWing = "/config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
                 val msgX32 = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
                 
-                socket.send(DatagramPacket(msgWing, msgWing.size, address, 2223))
-                socket.send(DatagramPacket(msgX32, msgX32.size, address, 10023))
-
-                _selectedFxSlot.value?.let { fx ->
-                    // For WING, fx time/tempo is usually parameter 1
+                // 2. Prepare FX Slot Message if selected
+                val msgFx = _selectedFxSlot.value?.let { fx ->
                     val path = "/fx/${fx.id}/par/1"
                     val nullsNeeded = 4 - (path.length % 4)
                     val msgPath = path.toByteArray() + ByteArray(nullsNeeded)
-                    
-                    val msgFx = msgPath + ",f\u0000\u0000".toByteArray() + bpmBytes
-                    socket.send(DatagramPacket(msgFx, msgFx.size, address, 2223))
+                    msgPath + ",f\u0000\u0000".toByteArray() + bpmBytes
                 }
 
+                // 3. Send to all relevant ports
+                for (port in ports) {
+                    socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
+                    socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
+                    msgFx?.let { 
+                        socket.send(DatagramPacket(it, it.size, address, port))
+                    }
+                }
                 socket.close()
             } catch (e: Exception) {
                 e.printStackTrace()

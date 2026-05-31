@@ -191,7 +191,7 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                         composable("main") {
                             MainScreen(
                                 viewModel = viewModel,
-                                onSwipeUp = { navController.navigate("fx_selection") },
+                                onSwipeUp = { navController.popBackStack() },
                                 onSwipeDown = navigateToHelp
                             )
                         }
@@ -201,16 +201,15 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                                 onMixerSelected = { 
                                     navController.navigate("fx_selection")
                                 },
-                                onSwipeDown = navigateToHelp
+                                onSwipeDown = navigateToHelp,
+                                onHelpClick = navigateToHelp
                             )
                         }
                         composable("fx_selection") {
                             FxSelectionScreen(
                                 viewModel = viewModel,
                                 onFxSelected = {
-                                    navController.navigate("main") {
-                                        popUpTo("settings") { inclusive = false }
-                                    }
+                                    navController.navigate("main")
                                 },
                                 onSwipeUp = { navController.popBackStack() },
                                 onSwipeDown = navigateToHelp
@@ -382,6 +381,7 @@ fun LandingAnimation(onFinished: () -> Unit) {
 @Composable
 fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () -> Unit) {
     val bpm by viewModel.bpm.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Animation for continuous fade-to-black
     var alpha by remember { mutableStateOf(1f) }
@@ -405,7 +405,10 @@ fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () 
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { viewModel.tapTempo() },
+                    onTap = { 
+                        vibrate(context, 50)
+                        viewModel.tapTempo() 
+                    },
                     onLongPress = { 
                         viewModel.selectMixer(null) // Reset mixer to allow re-entry
                         onSwipeUp() 
@@ -543,7 +546,8 @@ fun RadarScreen(onLongPress: () -> Unit) {
 fun MixerSelectionScreen(
     viewModel: WingViewModel, 
     onMixerSelected: () -> Unit,
-    onSwipeDown: () -> Unit
+    onSwipeDown: () -> Unit,
+    onHelpClick: () -> Unit
 ) {
     val mixers by viewModel.discoveredMixers.collectAsState()
     val selectedMixer by viewModel.selectedMixer.collectAsState()
@@ -582,6 +586,14 @@ fun MixerSelectionScreen(
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
+                        }
+                        Button(
+                            onClick = onHelpClick,
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue, contentColor = Color.White),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Text("?", fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                         }
                     }
                 }
