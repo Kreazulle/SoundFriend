@@ -275,31 +275,30 @@ class WingViewModel : ViewModel() {
                 while (isActive) {
                     try {
                         socket.receive(receivePacket)
-                        
-                        // OSC Robust Parsing: Find the type tag comma
                         val data = receivePacket.data
-                        val commaIndex = data.indexOf(','.toByte())
                         
-                        // Check if it's a float message (,f)
-                        if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
-                            if (data[commaIndex + 1] == 'f'.toByte()) {
-                                // The float value starts at the next 4-byte boundary after the type tag string
-                                // Type tag string is usually ",f\u0000\u0000" (4 bytes)
-                                val floatStartIndex = commaIndex + 4
-                                
-                                if (floatStartIndex + 4 <= receivePacket.length) {
-                                    val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
-                                    val receivedBpm = byteArrayToFloat(bpmBytes)
-                                    
-                                    if (receivedBpm in (20f..300f)) {
-                                        _bpm.value = receivedBpm
+                        // Robust OSC Path extraction (up to first null)
+                        val nullIndex = data.indexOf(0.toByte())
+                        if (nullIndex == -1) continue
+                        val path = String(data, 0, nullIndex)
+                        
+                        // Only process if it's a tempo path we care about
+                        if (path == "/config/tempo" || path == "/-config/tempo" || (path.startsWith("/fx/") && path.endsWith("/par/1"))) {
+                            val commaIndex = data.indexOf(','.toByte())
+                            if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
+                                if (data[commaIndex + 1] == 'f'.toByte()) {
+                                    val floatStartIndex = ((commaIndex + 4) / 4) * 4
+                                    if (floatStartIndex + 4 <= receivePacket.length) {
+                                        val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
+                                        val receivedBpm = byteArrayToFloat(bpmBytes)
+                                        if (receivedBpm in (20f..300f)) {
+                                            _bpm.value = receivedBpm
+                                        }
                                     }
                                 }
                             }
                         }
-                    } catch (_: Exception) {
-                        // Timeout or socket closed
-                    }
+                    } catch (_: Exception) {}
                 }
             }
 
@@ -356,28 +355,23 @@ class WingViewModel : ViewModel() {
 
     private fun sendBpmToWing(bpm: Float) {
         val mixer = _selectedMixer.value ?: return
-        if (mixer.ip == "0.0.0.0") return // Skip network OSC in "No Mixer" mode
+        if (mixer.ip == "0.0.0.0") return
         
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(mixer.ip)
-                val bpmBytes = floatToByteArray(bpm)
                 val ports = listOf(2223, 10023)
                 
-                // 1. Prepare Global Tempo Messages
-                val msgWing = "/config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
-                val msgX32 = "/-config/tempo\u0000\u0000\u0000,f\u0000\u0000".toByteArray() + bpmBytes
+                // 1. Prepare messages using the robust OSC helper
+                val msgWing = createOscMessage("/config/tempo", bpm)
+                val msgX32 = createOscMessage("/-config/tempo", bpm)
                 
-                // 2. Prepare FX Slot Message if selected
                 val msgFx = _selectedFxSlot.value?.let { fx ->
-                    val path = "/fx/${fx.id}/par/1"
-                    val nullsNeeded = 4 - (path.length % 4)
-                    val msgPath = path.toByteArray() + ByteArray(nullsNeeded)
-                    msgPath + ",f\u0000\u0000".toByteArray() + bpmBytes
+                    createOscMessage("/fx/${fx.id}/par/1", bpm)
                 }
 
-                // 3. Send to all relevant ports
+                // 2. Send to all relevant ports
                 for (port in ports) {
                     socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
                     socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
@@ -390,6 +384,19 @@ class WingViewModel : ViewModel() {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun createOscMessage(path: String, value: Float): ByteArray {
+        val pathBytes = path.toByteArray()
+        // OSC strings must be null-terminated and padded to a multiple of 4 bytes
+        val pathPadding = 4 - (pathBytes.size % 4)
+        val paddedPath = pathBytes + ByteArray(pathPadding)
+        
+        val typeTag = ",f".toByteArray()
+        // ",f" is 2 bytes, needs 2 nulls to reach 4 bytes
+        val paddedType = typeTag + ByteArray(2)
+        
+        return paddedPath + paddedType + floatToByteArray(value)
     }
 
     private fun floatToByteArray(value: Float): ByteArray {
