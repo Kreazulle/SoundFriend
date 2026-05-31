@@ -371,14 +371,16 @@ class WingViewModel : ViewModel() {
                 val socket = getSocket()
                 val address = InetAddress.getByName(mixer.ip)
                 
-                // 1. Prepare Master Tempo Messages (BPM value)
+                // 1. Prepare Master Tempo Message (BPM value)
                 val msgWing = createOscMessage("/config/tempo", bpm)
                 val msgX32 = createOscMessage("/-config/tempo", bpm)
                 
-                // 2. Prepare FX Slot Message (Time value in Seconds)
-                val timeSeconds = 60f / bpm.coerceAtLeast(1f)
+                // 2. Prepare FX Slot Message (Absolute Milliseconds)
+                // WING Rule: Float > 1.0 is interpreted as milliseconds.
+                val timeMs = 60000f / bpm.coerceAtLeast(1f)
                 val msgFx = _selectedFxSlot.value?.let { fx ->
-                    createOscMessage("/fx/${fx.id}/par/1", timeSeconds)
+                    // Use /fx/slot/n/par/1 for maximum compatibility with FW 3.0.6 JSON structure
+                    createOscMessage("/fx/slot/${fx.id}/par/1", timeMs)
                 }
 
                 // 3. Send to all relevant ports using the shared socket
