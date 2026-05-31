@@ -289,21 +289,41 @@ class WingViewModel : ViewModel() {
                         socket.receive(receivePacket)
                         val data = receivePacket.data
                         
-                        // Look for the type tag comma
-                        val commaIndex = data.indexOf(','.toByte())
-                        if (commaIndex != -1 && (commaIndex + 4 < receivePacket.length)) {
-                            if (data[commaIndex + 1] == 'f'.toByte()) {
-                                // Align to 4-byte boundary for the float value
-                                val floatStartIndex = ((commaIndex + 4) / 4) * 4
-                                if (floatStartIndex + 4 <= receivePacket.length) {
-                                    val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
-                                    val value = byteArrayToFloat(bpmBytes)
-                                    
-                                    // If value is > 20, it's likely BPM. If < 5, it's likely Time (Seconds)
-                                    val receivedBpm = if (value < 5f && value > 0.1f) (60f / value) else value
-                                    
-                                    if (receivedBpm in (20f..300f)) {
-                                        _bpm.value = receivedBpm
+                        // 1. Extract OSC Path
+                        val nullIndex = data.indexOf(0.toByte())
+                        if (nullIndex <= 0) continue
+                        val path = String(data, 0, nullIndex)
+                        
+                        // 2. Identify if it's a message we care about
+                        val isGlobalTempo = (path == "/config/tempo") || (path == "/-config/tempo")
+                        val isFxTime = path.startsWith("/fx/") && (path.endsWith("/1") || path.endsWith("/par/1"))
+                        
+                        if (isGlobalTempo || isFxTime) {
+                            // 3. Find type tag comma
+                            val commaIndex = data.indexOf(','.toByte())
+                            if (commaIndex != -1 && (commaIndex + 1 < receivePacket.length)) {
+                                if (data[commaIndex + 1] == 'f'.toByte()) {
+                                    // 4. Extract float value (aligned to 4-byte boundary)
+                                    val floatStartIndex = ((commaIndex + 4) / 4) * 4
+                                    if (floatStartIndex + 4 <= receivePacket.length) {
+                                        val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
+                                        val value = byteArrayToFloat(bpmBytes)
+                                        
+                                        var receivedBpm = 0f
+                                        if (isGlobalTempo) {
+                                            receivedBpm = value // Global is already BPM
+                                        } else {
+                                            // FX Time is likely Absolute MS (> 10) or Seconds (> 0.1)
+                                            receivedBpm = when {
+                                                value > 10f -> 60000f / value // MS to BPM
+                                                value > 0.1f -> 60f / value    // Seconds to BPM
+                                                else -> 0f
+                                            }
+                                        }
+                                        
+                                        if (receivedBpm in (20f..350f)) {
+                                            _bpm.value = receivedBpm
+                                        }
                                     }
                                 }
                             }
