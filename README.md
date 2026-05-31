@@ -60,12 +60,18 @@ echo "Drums Help" > /dev/udp/[WATCH_IP]/5005
 
 ## 📖 How to Use
 
-1.  **Discovery**: Ensure your watch and mixer are on the same Wi-Fi network. Tap **Scan** in the setup menu.
-2.  **Setup**: Select your mixer from the list. The app will automatically switch to the main BPM screen.
-3.  **Interaction**:
-    *   **Tap**: Set a new BPM.
-    *   **Long Press**: Return to the settings/setup menu.
-    *   **OK Button**: Stop alert vibration and dismiss messages.
+### Navigation & Gestures
+*   **↓ Swipe Down**: Open the **Help** screen from any menu.
+*   **↑ Swipe Up**: 
+    *   From **Tap Screen** -> Go back to **FX Selection**.
+    *   From **FX Selection** -> Go back to **Mixer Selection**.
+*   **Tap (Main Screen)**: Set a new BPM (Tap Tempo).
+*   **Long Press**: Return to the **FX Selection** screen and reset current selection.
+
+### Setup Flow
+1.  **Mixer Selection**: Tap **Scan** to find WING consoles on your network. Select your mixer from the list.
+2.  **FX Selection**: The app will query the mixer for compatible Delay/Tempo effects. Select an effect slot to sync or choose **"Use Global Only"**.
+3.  **Tap Tempo**: Once configured, you are taken to the main interface to control the tempo.
 
 > [!WARNING]
 > **Battery Usage**: This application keeps the screen active and network listeners running at all times to ensure instant access to tap-tempo and real-time alerts without any delay or interaction barriers. While this is essential for live performances, it results in significant battery consumption. It is recommended to start with a full charge before your session.

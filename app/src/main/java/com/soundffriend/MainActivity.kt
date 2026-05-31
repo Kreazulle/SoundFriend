@@ -724,15 +724,18 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
             }
         }
         item {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        item {
+            Text(text = "Gestures:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         item {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(0.85f)
             ) {
-                Text(text = "OSC (WING):", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Ports 10023, 2223", fontSize = 14.sp)
+                Text(text = "↑ Swipe Up:", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Back to previous menu", fontSize = 11.sp, textAlign = TextAlign.Center)
             }
         }
         item {
@@ -740,8 +743,8 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(0.85f)
             ) {
-                Text(text = "Alerts (UDP):", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Port 5005", fontSize = 14.sp)
+                Text(text = "↓ Swipe Down:", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Open this Help screen", fontSize = 11.sp, textAlign = TextAlign.Center)
             }
         }
         item {
@@ -749,8 +752,17 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(0.85f)
             ) {
-                Text(text = "Alerts (OSC):", fontSize = 12.sp, color = Color.LightGray)
-                Text(text = "Port 5006", fontSize = 14.sp)
+                Text(text = "Tap (Main):", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Set tempo (Tap Tempo)", fontSize = 11.sp, textAlign = TextAlign.Center)
+            }
+        }
+        item {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                Text(text = "Long Press:", fontSize = 12.sp, color = Color.LightGray)
+                Text(text = "Reset selection/Restart", fontSize = 11.sp, textAlign = TextAlign.Center)
             }
         }
         item {
