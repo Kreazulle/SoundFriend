@@ -242,7 +242,9 @@ class WingViewModel : ViewModel() {
                                     if (modelName.isNotEmpty() && modelName != "NONE") {
                                         val isTempoFx = modelName.contains("DELAY", ignoreCase = true) || 
                                                        modelName.contains("TAP", ignoreCase = true) ||
-                                                       modelName.contains("ECHO", ignoreCase = true)
+                                                       modelName.contains("ECHO", ignoreCase = true) ||
+                                                       modelName.contains("OILCAN", ignoreCase = true) ||
+                                                       modelName.contains("STEREO", ignoreCase = true)
                                         
                                         if (isTempoFx && !newSlots.any { it.id == slotId }) {
                                             newSlots.add(FxSlot(slotId, modelName, true))
@@ -401,12 +403,19 @@ class WingViewModel : ViewModel() {
                 val msgWing = createOscMessage("/config/tempo", bpm)
                 val msgX32 = createOscMessage("/-config/tempo", bpm)
                 
-                // 2. Prepare FX Slot Message (Absolute Milliseconds)
-                // WING Rule: Float > 1.0 is interpreted as milliseconds.
+                // 2. Prepare FX Slot Messages
                 val timeMs = 60000f / bpm.coerceAtLeast(1f)
-                val msgFx = _selectedFxSlot.value?.let { fx ->
-                    // New Format: /fx/[slot]/[parameter]
-                    createOscMessage("/fx/${fx.id}/1", timeMs)
+                val fxMessages = mutableListOf<ByteArray>()
+                
+                val selectedFx = _selectedFxSlot.value
+                if (selectedFx != null) {
+                    // Send to specific selected slot
+                    fxMessages.add(createOscMessage("/fx/${selectedFx.id}/1", timeMs))
+                } else {
+                    // GLOBAL mode: Send to all identified tempo-syncable FX slots
+                    for (fx in _fxSlots.value) {
+                        fxMessages.add(createOscMessage("/fx/${fx.id}/1", timeMs))
+                    }
                 }
 
                 // 3. Send to all relevant ports using the shared socket
@@ -414,8 +423,8 @@ class WingViewModel : ViewModel() {
                 for (port in ports) {
                     socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
                     socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
-                    msgFx?.let { 
-                        socket.send(DatagramPacket(it, it.size, address, port))
+                    for (fxMsg in fxMessages) {
+                        socket.send(DatagramPacket(fxMsg, fxMsg.size, address, port))
                     }
                 }
             } catch (e: Exception) {

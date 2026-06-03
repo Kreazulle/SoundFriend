@@ -589,19 +589,21 @@ fun MixerSelectionScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val moduleHeight = screenHeight / 5
-    val itemHeight = moduleHeight - 2.dp // 2px/dp padding
+
+    // Scaling params to make the center item 20% larger than its base size
+    val scalingParams = ScalingLazyColumnDefaults.scalingParams(
+        edgeAlpha = 0.5f,
+        edgeScale = 0.8f, // Shrink edges to make center pop
+        minElementHeight = 0.1f,
+        maxElementHeight = 0.3f // Expand center to 30% of screen height
+    )
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         ScalingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             autoCentering = AutoCenteringParams(itemIndex = 0),
-            scalingParams = ScalingLazyColumnDefaults.scalingParams(
-                edgeAlpha = 0.5f,
-                edgeScale = 1.0f,
-                minElementHeight = 0.1f,
-                maxElementHeight = 0.25f
-            )
+            scalingParams = scalingParams
         ) {
             if (mixers.isEmpty()) {
                 item {
@@ -700,6 +702,14 @@ fun FxSelectionScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val moduleHeight = screenHeight / 5
 
+    // Scaling params to make the center item pop
+    val scalingParams = ScalingLazyColumnDefaults.scalingParams(
+        edgeAlpha = 0.5f,
+        edgeScale = 0.8f,
+        minElementHeight = 0.1f,
+        maxElementHeight = 0.3f
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -720,10 +730,7 @@ fun FxSelectionScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             autoCentering = AutoCenteringParams(itemIndex = 0),
-            scalingParams = ScalingLazyColumnDefaults.scalingParams(
-                edgeAlpha = 0.5f,
-                edgeScale = 1.0f
-            )
+            scalingParams = scalingParams
         ) {
             item {
                 Box(
