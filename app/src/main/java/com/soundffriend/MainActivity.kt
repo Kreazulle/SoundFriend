@@ -590,12 +590,12 @@ fun MixerSelectionScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val moduleHeight = screenHeight / 5
 
-    // Scaling params to make the center item 20% larger than its base size
+    // Scaling params to create a "Magnifying Glass" effect in the center
     val scalingParams = ScalingLazyColumnDefaults.scalingParams(
-        edgeAlpha = 0.5f,
-        edgeScale = 0.8f, // Shrink edges to make center pop
+        edgeAlpha = 0.4f,
+        edgeScale = 0.5f,    // Smaller edges
         minElementHeight = 0.1f,
-        maxElementHeight = 0.3f // Expand center to 30% of screen height
+        maxElementHeight = 0.6f  // Much larger center (60% of screen)
     )
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -663,25 +663,24 @@ fun MixerSelectionScreen(
             
             items(mixers) { mixer ->
                 val isSelected = selectedMixer?.ip == mixer.ip
-                Box(
-                    modifier = Modifier
-                        .height(moduleHeight)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Chip(
-                        onClick = {
-                            viewModel.selectMixer(mixer)
-                            onMixerSelected(mixer)
-                        },
-                        label = { Text(mixer.name, fontSize = 12.sp) },
-                        secondaryLabel = { Text(mixer.ip, fontSize = 10.sp) },
-                        colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
-                                 else ChipDefaults.secondaryChipColors(),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                Chip(
+                    onClick = {
+                        viewModel.selectMixer(mixer)
+                        onMixerSelected(mixer)
+                    },
+                    label = { 
+                        Text(
+                            mixer.name, 
+                            fontSize = 14.sp, 
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        ) 
+                    },
+                    secondaryLabel = { Text(mixer.ip, fontSize = 11.sp) },
+                    colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
+                             else ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
+                )
             }
         }
     }
@@ -702,12 +701,12 @@ fun FxSelectionScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val moduleHeight = screenHeight / 5
 
-    // Scaling params to make the center item pop
+    // Scaling params to make the center item pop like a lens
     val scalingParams = ScalingLazyColumnDefaults.scalingParams(
-        edgeAlpha = 0.5f,
-        edgeScale = 0.8f,
+        edgeAlpha = 0.4f,
+        edgeScale = 0.5f,
         minElementHeight = 0.1f,
-        maxElementHeight = 0.3f
+        maxElementHeight = 0.6f
     )
 
     Box(
@@ -763,25 +762,17 @@ fun FxSelectionScreen(
 
             items(fxSlots) { fx ->
                 val isSelected = selectedFxSlot?.id == fx.id
-                Box(
-                    modifier = Modifier
-                        .height(moduleHeight)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Chip(
-                        onClick = { 
-                            viewModel.selectFxSlot(fx)
-                            onFxSelected()
-                        },
-                        label = { Text(fx.model, fontSize = 12.sp) },
-                        secondaryLabel = { Text("Slot ${fx.id}", fontSize = 10.sp) },
-                        colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
-                                 else ChipDefaults.secondaryChipColors(),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                Chip(
+                    onClick = { 
+                        viewModel.selectFxSlot(fx)
+                        onFxSelected()
+                    },
+                    label = { Text(fx.model, fontSize = 14.sp) },
+                    secondaryLabel = { Text("Slot ${fx.id}", fontSize = 11.sp) },
+                    colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
+                             else ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
+                )
             }
 
             item {

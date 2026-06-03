@@ -241,10 +241,14 @@ class WingViewModel : ViewModel() {
                                     
                                     if (modelName.isNotEmpty() && modelName != "NONE") {
                                         val isTempoFx = modelName.contains("DELAY", ignoreCase = true) || 
+                                                       modelName.contains("DLY", ignoreCase = true) ||
                                                        modelName.contains("TAP", ignoreCase = true) ||
                                                        modelName.contains("ECHO", ignoreCase = true) ||
-                                                       modelName.contains("OILCAN", ignoreCase = true) ||
-                                                       modelName.contains("STEREO", ignoreCase = true)
+                                                       modelName.contains("OIL", ignoreCase = true) ||
+                                                       modelName.contains("STEREO", ignoreCase = true) ||
+                                                       modelName.contains("ST.", ignoreCase = true) ||
+                                                       modelName.contains("ECO", ignoreCase = true) ||
+                                                       modelName.contains("TIME", ignoreCase = true)
                                         
                                         if (isTempoFx && !newSlots.any { it.id == slotId }) {
                                             newSlots.add(FxSlot(slotId, modelName, true))
@@ -409,12 +413,18 @@ class WingViewModel : ViewModel() {
                 
                 val selectedFx = _selectedFxSlot.value
                 if (selectedFx != null) {
-                    // Send to specific selected slot
-                    fxMessages.add(createOscMessage("/fx/${selectedFx.id}/1", timeMs))
+                    // Send to specific selected slot (first 4 parameters to cover L, R, Feedback-Sync, etc.)
+                    for (paramId in 1..4) {
+                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/$paramId", timeMs))
+                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/par/$paramId", timeMs))
+                    }
                 } else {
-                    // GLOBAL mode: Send to all identified tempo-syncable FX slots
+                    // GLOBAL mode: Send to all identified tempo-syncable FX slots (first 4 parameters each)
                     for (fx in _fxSlots.value) {
-                        fxMessages.add(createOscMessage("/fx/${fx.id}/1", timeMs))
+                        for (paramId in 1..4) {
+                            fxMessages.add(createOscMessage("/fx/${fx.id}/$paramId", timeMs))
+                            fxMessages.add(createOscMessage("/fx/${fx.id}/par/$paramId", timeMs))
+                        }
                     }
                 }
 
