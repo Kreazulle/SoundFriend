@@ -41,7 +41,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumnDefaults
+import androidx.wear.compose.foundation.lazy.AutoCenteringParams
 import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
@@ -55,6 +58,27 @@ import androidx.wear.compose.foundation.CurvedTextStyle
 import androidx.wear.compose.foundation.CurvedDirection
 import androidx.wear.compose.material.curvedText
 
+
+val HelpTriangleShape = GenericShape { size, _ ->
+    val s = size.width
+    val h = s * 0.866f // Inaltimea triunghiului echilateral (sqrt(3)/2)
+    val yOffset = size.height - h // Aliniat la baza (bottom)
+    val r = s * 0.12f // Raza de rotunjire
+
+    // Varful de sus (centrat)
+    moveTo(s * 0.5f, yOffset + r * 0.4f)
+    quadraticTo(s * 0.5f, yOffset, s * 0.5f + r * 0.8f, yOffset + r * 0.8f)
+    
+    // Latura dreapta spre coltul dreapta-jos
+    lineTo(s - r * 0.8f, yOffset + h - r * 1.2f)
+    quadraticTo(s, yOffset + h, s - r * 2f, yOffset + h)
+    
+    // Baza dreapta spre coltul stanga-jos
+    lineTo(r * 2f, yOffset + h)
+    quadraticTo(0f, yOffset + h, r * 0.8f, yOffset + h - r * 1.2f)
+
+    close()
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,11 +120,12 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
         }
     }
 
-    // Automatically navigate to Main ONLY if NO MIXER is selected
+    // Automatically navigate to Main ONLY if DEMO is selected
     LaunchedEffect(selectedMixer) {
         if (selectedMixer?.ip == "0.0.0.0") {
             navController.navigate("main") {
-                popUpTo("settings") { inclusive = true }
+                // We keep the settings in backstack so we can go back
+                launchSingleTop = true
             }
         }
     }
@@ -198,8 +223,12 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                         composable("settings") {
                             MixerSelectionScreen(
                                 viewModel = viewModel,
-                                onMixerSelected = { 
-                                    navController.navigate("fx_selection")
+                                onMixerSelected = { mixer ->
+                                    if (mixer.ip == "0.0.0.0") {
+                                        navController.navigate("main")
+                                    } else {
+                                        navController.navigate("fx_selection")
+                                    }
                                 },
                                 onSwipeDown = navigateToHelp,
                                 onHelpClick = navigateToHelp
@@ -544,55 +573,79 @@ fun RadarScreen(onLongPress: () -> Unit) {
 @Composable
 fun MixerSelectionScreen(
     viewModel: WingViewModel, 
-    onMixerSelected: () -> Unit,
+    onMixerSelected: (WingMixer) -> Unit,
     onSwipeDown: () -> Unit,
     onHelpClick: () -> Unit
 ) {
     val mixers by viewModel.discoveredMixers.collectAsState()
     val selectedMixer by viewModel.selectedMixer.collectAsState()
+    
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val moduleHeight = screenHeight / 5
+    val itemHeight = moduleHeight - 2.dp // 2px/dp padding
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         ScalingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+            autoCentering = AutoCenteringParams(itemIndex = 0),
+            scalingParams = ScalingLazyColumnDefaults.scalingParams(
+                edgeAlpha = 0.5f,
+                edgeScale = 1.0f,
+                minElementHeight = 0.1f,
+                maxElementHeight = 0.25f
+            )
         ) {
             item {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Select Mixer", modifier = Modifier.padding(bottom = 8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .height(moduleHeight * 1.8f) // Triangle needs a bit more than 1/5
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         Button(
                             onClick = { viewModel.startDiscovery() },
                             shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red, contentColor = Color.White),
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(42.dp).offset(x = (-2).dp, y = 2.dp)
                         ) {
-                            Text("Scan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("SCAN", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
-                        Button(
-                            onClick = { 
-                                viewModel.selectMixer(WingMixer("NO MIXER", "0.0.0.0"))
-                                onMixerSelected()
-                            },
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.Yellow, contentColor = Color.Black),
-                            modifier = Modifier.size(44.dp)
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.Bottom
                         ) {
-                            Text(
-                                text = "NO\nMIXER",
-                                fontSize = 9.sp, 
-                                lineHeight = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                        Button(
-                            onClick = onHelpClick,
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue, contentColor = Color.White),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Text("?", fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            Button(
+                                onClick = {
+                                    val demoMixer = WingMixer("DEMO", "0.0.0.0")
+                                    viewModel.selectMixer(demoMixer)
+                                    onMixerSelected(demoMixer)
+                                },
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Yellow, contentColor = Color.Black),
+                                modifier = Modifier.size(42.dp).offset(x = 6.dp)
+                            ) {
+                                Text("DEMO", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = onHelpClick,
+                                shape = HelpTriangleShape,
+                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue, contentColor = Color.White),
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                Text(
+                                    text = "?", 
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.offset(y = (-4).dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -600,17 +653,25 @@ fun MixerSelectionScreen(
             
             items(mixers) { mixer ->
                 val isSelected = selectedMixer?.ip == mixer.ip
-                Chip(
-                    onClick = {
-                        viewModel.selectMixer(mixer)
-                        onMixerSelected()
-                    },
-                    label = { Text(mixer.name) },
-                    secondaryLabel = { Text(mixer.ip) },
-                    colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
-                             else ChipDefaults.secondaryChipColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(
+                    modifier = Modifier
+                        .height(moduleHeight)
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Chip(
+                        onClick = {
+                            viewModel.selectMixer(mixer)
+                            onMixerSelected(mixer)
+                        },
+                        label = { Text(mixer.name, fontSize = 12.sp) },
+                        secondaryLabel = { Text(mixer.ip, fontSize = 10.sp) },
+                        colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
+                                 else ChipDefaults.secondaryChipColors(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     }
@@ -627,6 +688,10 @@ fun FxSelectionScreen(
     val selectedFxSlot by viewModel.selectedFxSlot.collectAsState()
     val selectedMixer by viewModel.selectedMixer.collectAsState()
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val moduleHeight = screenHeight / 5
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -638,7 +703,6 @@ fun FxSelectionScreen(
                         totalY = 0f
                     },
                     onVerticalDrag = { change, dragAmount ->
-                        // Only consume if we are swiping UP significantly
                         if (dragAmount < -10) totalY += dragAmount
                     }
                 )
@@ -647,63 +711,92 @@ fun FxSelectionScreen(
         ScalingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+            autoCentering = AutoCenteringParams(itemIndex = 0),
+            scalingParams = ScalingLazyColumnDefaults.scalingParams(
+                edgeAlpha = 0.5f,
+                edgeScale = 1.0f
+            )
         ) {
             item {
-                Text(
-                    text = "Sync with FX:", 
-                    fontSize = 12.sp, 
-                    fontWeight = FontWeight.Bold,
-                    color = Color.LightGray,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                Box(
+                    modifier = Modifier.height(moduleHeight).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "SYNC WITH FX:", 
+                        fontSize = 12.sp, 
+                        fontWeight = FontWeight.Bold,
+                        color = Color.LightGray
+                    )
+                }
             }
 
             if (fxSlots.isEmpty() && selectedMixer != null && selectedMixer!!.ip != "0.0.0.0") {
                 item {
-                    Text(
-                        text = "Querying FX slots...",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(vertical = 20.dp)
-                    )
+                    Box(
+                        modifier = Modifier.height(moduleHeight).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Querying FX slots...",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
 
             items(fxSlots) { fx ->
                 val isSelected = selectedFxSlot?.id == fx.id
-                Chip(
-                    onClick = { 
-                        viewModel.selectFxSlot(fx)
-                        onFxSelected()
-                    },
-                    label = { Text(fx.model) },
-                    secondaryLabel = { Text("Slot ${fx.id}") },
-                    colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
-                             else ChipDefaults.secondaryChipColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(
+                    modifier = Modifier
+                        .height(moduleHeight)
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Chip(
+                        onClick = { 
+                            viewModel.selectFxSlot(fx)
+                            onFxSelected()
+                        },
+                        label = { Text(fx.model, fontSize = 12.sp) },
+                        secondaryLabel = { Text("Slot ${fx.id}", fontSize = 10.sp) },
+                        colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
+                                 else ChipDefaults.secondaryChipColors(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
 
             item {
-                Button(
-                    onClick = {
-                        viewModel.selectFxSlot(null)
-                        onFxSelected()
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                Box(
+                    modifier = Modifier.height(moduleHeight).fillMaxWidth().padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("Use Global Only", fontSize = 12.sp)
+                    Button(
+                        onClick = {
+                            viewModel.selectFxSlot(null)
+                            onFxSelected()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text("Use Global Only", fontSize = 11.sp)
+                    }
                 }
             }
             
             item {
-                Text(
-                    text = "↑ Swipe Up for Mixers",
-                    fontSize = 10.sp,
-                    color = Color.DarkGray,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+                Box(
+                    modifier = Modifier.height(moduleHeight).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "↑ Swipe Up for Mixers",
+                        fontSize = 10.sp,
+                        color = Color.DarkGray
+                    )
+                }
             }
         }
     }
