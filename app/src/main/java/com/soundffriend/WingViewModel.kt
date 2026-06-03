@@ -184,6 +184,12 @@ class WingViewModel : ViewModel() {
         _fxSlots.value = emptyList()
         _selectedFxSlot.value = null
         
+        if (mixer == null) {
+            _discoveredMixers.value = emptyList()
+            _isScanning.value = false
+            discoveryJob?.cancel()
+        }
+        
         if ((mixer != null) && (mixer.ip != "0.0.0.0")) {
             // Start listening for OSC messages from this mixer
             listenToMixer(mixer)

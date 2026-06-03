@@ -216,7 +216,10 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                         composable("main") {
                             MainScreen(
                                 viewModel = viewModel,
-                                onSwipeUp = { navController.popBackStack() },
+                                onSwipeUp = { 
+                                    viewModel.selectMixer(null)
+                                    navController.popBackStack("settings", inclusive = false) 
+                                },
                                 onSwipeDown = navigateToHelp
                             )
                         }
@@ -240,7 +243,10 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                                 onFxSelected = {
                                     navController.navigate("main")
                                 },
-                                onSwipeUp = { navController.popBackStack() },
+                                onSwipeUp = { 
+                                    viewModel.selectMixer(null)
+                                    navController.popBackStack("settings", inclusive = false) 
+                                },
                                 onSwipeDown = navigateToHelp
                             )
                         }
@@ -597,54 +603,56 @@ fun MixerSelectionScreen(
                 maxElementHeight = 0.25f
             )
         ) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .height(moduleHeight * 1.8f) // Triangle needs a bit more than 1/5
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+            if (mixers.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .height(moduleHeight * 2.5f) // Further increased for even larger buttons
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Button(
-                            onClick = { viewModel.startDiscovery() },
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red, contentColor = Color.White),
-                            modifier = Modifier.size(42.dp).offset(x = (-2).dp, y = 2.dp)
-                        ) {
-                            Text("SCAN", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.Bottom
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Button(
-                                onClick = {
-                                    val demoMixer = WingMixer("DEMO", "0.0.0.0")
-                                    viewModel.selectMixer(demoMixer)
-                                    onMixerSelected(demoMixer)
-                                },
+                                onClick = { viewModel.startDiscovery() },
                                 shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Yellow, contentColor = Color.Black),
-                                modifier = Modifier.size(42.dp).offset(x = 6.dp)
+                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red, contentColor = Color.White),
+                                modifier = Modifier.size(60.dp).offset(x = (-2).dp, y = 2.dp)
                             ) {
-                                Text("DEMO", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("SCAN", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
-                            Button(
-                                onClick = onHelpClick,
-                                shape = HelpTriangleShape,
-                                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue, contentColor = Color.White),
-                                modifier = Modifier.size(52.dp)
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.Bottom
                             ) {
-                                Text(
-                                    text = "?", 
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.offset(y = (-4).dp)
-                                )
+                                Button(
+                                    onClick = {
+                                        val demoMixer = WingMixer("DEMO", "0.0.0.0")
+                                        viewModel.selectMixer(demoMixer)
+                                        onMixerSelected(demoMixer)
+                                    },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Yellow, contentColor = Color.Black),
+                                    modifier = Modifier.size(60.dp).offset(x = 6.dp)
+                                ) {
+                                    Text("DEMO", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = onHelpClick,
+                                    shape = HelpTriangleShape,
+                                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Blue, contentColor = Color.White),
+                                    modifier = Modifier.size(75.dp)
+                                ) {
+                                    Text(
+                                        text = "?", 
+                                        fontSize = 27.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.offset(y = (-4).dp)
+                                    )
+                                }
                             }
                         }
                     }
