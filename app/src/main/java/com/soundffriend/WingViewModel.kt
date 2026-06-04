@@ -450,11 +450,11 @@ class WingViewModel : ViewModel() {
                 // OILCAN: 1..1000 ms -> 0..10.0
                 (timeMs / 100f).coerceIn(0f, 10f)
             }
-            modelUpper.contains("ST-DL") || modelUpper.contains("STEREO") -> {
-                // ST-DL: 1..3000 ms -> 0..1.0
-                (timeMs / 3000f).coerceIn(0f, 1f)
+            modelUpper.contains("TAPE-DL") || modelUpper.contains("TAPE") -> {
+                // TAPE-DL: 60..650 ms range, mapped between values 60 and 650 (direct ms)
+                timeMs.coerceIn(60f, 650f)
             }
-            else -> timeMs // Most other delays accept absolute ms if value > 1.0
+            else -> timeMs // ST-DL (Stereo Delay), TAP-DL, etc. use absolute ms like Ultra tap
         }
     }
 
