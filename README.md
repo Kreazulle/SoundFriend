@@ -15,10 +15,14 @@ In this environment, communication between the stage and the engineer becomes sl
     *   Receive instant updates on the watch when the tempo is changed physically on the console.
     *   Visual pulse animation perfectly mapped to the current BPM.
 *   **Intelligent FX Delay Control**:
-    *   **Automatic Recognition**: Automatically identifies delay effects across all 16 FX slots, including `ST-DL` (Stereo Delay), `TAP-DL` (Tap Delay), `TAPE-DL` (Tape Delay), and `OILCAN` (Oil Can Delay).
+    *   **Automatic Recognition**: Automatically identifies delay effects across all 16 FX slots, including `ST-DL` (Stereo Delay), `TAP-DL` (Tap Delay), `TAPE-DL` (Tape Delay), `BBD-DL` (BBD Delay), and `OILCAN` (Oil Can Delay).
     *   **Individual Selection**: Choose a specific FX slot to control its time parameters with precision.
     *   **Global Sync Mode**: Use the "Global Only" option to synchronize **all** identified delay slots on the console simultaneously with a single tap.
-    *   **Hardware-Accurate Mapping**: Implements specific OSC mappings for complex effects (e.g., `TAPE-DL` mapped to 60-650ms, `OILCAN` scaled 0-10.0) and supports multi-parameter sync (L/R/Feedback).
+    *   **Hardware-Accurate Mapping**: Implements specific OSC mappings for complex effects:
+        *   `TAPE-DL`: Mapped to 60-650ms range.
+        *   `BBD-DL`: Mapped 1001ms to a 1-100 scale.
+        *   `OILCAN`: Scaled 0-10.0 for 1000ms range.
+        *   Supports multi-parameter sync (L/R/Feedback) across all models.
 *   **Remote Alert System**:
     *   Receive urgent text notifications from the FOH or stage team.
     *   Supports raw **UDP (Port 5005)** and **OSC (Port 5006)** protocols.

@@ -243,6 +243,7 @@ class WingViewModel : ViewModel() {
                                         val isTempoFx = modelName.contains("ST-DL", ignoreCase = true) || 
                                                        modelName.contains("TAP-DL", ignoreCase = true) ||
                                                        modelName.contains("TAPE-DL", ignoreCase = true) ||
+                                                       modelName.contains("BBD-DL", ignoreCase = true) ||
                                                        modelName.contains("OILCAN", ignoreCase = true) ||
                                                        modelName.contains("DELAY", ignoreCase = true) || 
                                                        modelName.contains("DLY", ignoreCase = true) ||
@@ -449,6 +450,10 @@ class WingViewModel : ViewModel() {
             modelUpper.contains("OILCAN") || modelUpper.contains("OIL") -> {
                 // OILCAN: 1..1000 ms -> 0..10.0
                 (timeMs / 100f).coerceIn(0f, 10f)
+            }
+            modelUpper.contains("BBD-DL") || modelUpper.contains("BBD") -> {
+                // BBD Delay: 1001 ms -> 1..100 scale
+                (timeMs / 10.01f).coerceIn(1f, 100f)
             }
             modelUpper.contains("TAPE-DL") || modelUpper.contains("TAPE") -> {
                 // TAPE-DL: 60..650 ms range, mapped between values 60 and 650 (direct ms)
