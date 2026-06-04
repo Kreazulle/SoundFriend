@@ -240,15 +240,15 @@ class WingViewModel : ViewModel() {
                                         .trim { it <= ' ' || it.toInt() == 0 }
                                     
                                     if (modelName.isNotEmpty() && modelName != "NONE") {
-                                        val isTempoFx = modelName.contains("DELAY", ignoreCase = true) || 
+                                        val isTempoFx = modelName.contains("ST-DL", ignoreCase = true) || 
+                                                       modelName.contains("TAP-DL", ignoreCase = true) ||
+                                                       modelName.contains("TAPE-DL", ignoreCase = true) ||
+                                                       modelName.contains("OILCAN", ignoreCase = true) ||
+                                                       modelName.contains("DELAY", ignoreCase = true) || 
                                                        modelName.contains("DLY", ignoreCase = true) ||
                                                        modelName.contains("TAP", ignoreCase = true) ||
                                                        modelName.contains("ECHO", ignoreCase = true) ||
-                                                       modelName.contains("OIL", ignoreCase = true) ||
-                                                       modelName.contains("STEREO", ignoreCase = true) ||
-                                                       modelName.contains("ST.", ignoreCase = true) ||
-                                                       modelName.contains("ECO", ignoreCase = true) ||
-                                                       modelName.contains("TIME", ignoreCase = true)
+                                                       modelName.contains("STEREO", ignoreCase = true)
                                         
                                         if (isTempoFx && !newSlots.any { it.id == slotId }) {
                                             newSlots.add(FxSlot(slotId, modelName, true))
