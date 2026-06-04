@@ -108,12 +108,12 @@ class WingViewModel : ViewModel() {
                 if (response.contains("WING,")) {
                     val startIndex = response.indexOf("WING,")
                     val parts = response.substring(startIndex).split(",")
-                    val name = if (parts.size >= 3) "${parts[2]} @ $ip" else "WING @ $ip"
+                    val name = if (parts.size >= 3) parts[2] else "WING"
                     addMixer(name, ip)
                 } else if (response.contains("/xinfo")) {
                     val parts = response.split(Regex("[^a-zA-Z0-9 _-]"))
                     val consoleName = parts.firstOrNull { (it.length > 2) && (it != "xinfo") } ?: "Wing"
-                    addMixer("$consoleName @ $ip", ip)
+                    addMixer(consoleName, ip)
                 }
             } catch (_: Exception) { }
         }
@@ -413,17 +413,17 @@ class WingViewModel : ViewModel() {
                 
                 val selectedFx = _selectedFxSlot.value
                 if (selectedFx != null) {
-                    // Send to specific selected slot (first 4 parameters to cover L, R, Feedback-Sync, etc.)
+                    val value = calculateFxValue(selectedFx.model, timeMs)
                     for (paramId in 1..4) {
-                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/$paramId", timeMs))
-                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/par/$paramId", timeMs))
+                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/$paramId", value))
+                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/par/$paramId", value))
                     }
                 } else {
-                    // GLOBAL mode: Send to all identified tempo-syncable FX slots (first 4 parameters each)
                     for (fx in _fxSlots.value) {
+                        val value = calculateFxValue(fx.model, timeMs)
                         for (paramId in 1..4) {
-                            fxMessages.add(createOscMessage("/fx/${fx.id}/$paramId", timeMs))
-                            fxMessages.add(createOscMessage("/fx/${fx.id}/par/$paramId", timeMs))
+                            fxMessages.add(createOscMessage("/fx/${fx.id}/$paramId", value))
+                            fxMessages.add(createOscMessage("/fx/${fx.id}/par/$paramId", value))
                         }
                     }
                 }
@@ -440,6 +440,21 @@ class WingViewModel : ViewModel() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private fun calculateFxValue(model: String, timeMs: Float): Float {
+        val modelUpper = model.uppercase()
+        return when {
+            modelUpper.contains("OILCAN") || modelUpper.contains("OIL") -> {
+                // OILCAN: 1..1000 ms -> 0..10.0
+                (timeMs / 100f).coerceIn(0f, 10f)
+            }
+            modelUpper.contains("ST-DL") || modelUpper.contains("STEREO") -> {
+                // ST-DL: 1..3000 ms -> 0..1.0
+                (timeMs / 3000f).coerceIn(0f, 1f)
+            }
+            else -> timeMs // Most other delays accept absolute ms if value > 1.0
         }
     }
 
