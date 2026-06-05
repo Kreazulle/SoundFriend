@@ -309,7 +309,7 @@ class WingViewModel : ViewModel() {
                         
                         // 2. Identify if it's a message we care about
                         val isGlobalTempo = (path == "/config/tempo") || (path == "/-config/tempo")
-                        val isFxTime = path.startsWith("/fx/") && (path.endsWith("/1") || path.endsWith("/par/1"))
+                        val isFxTime = path.startsWith("/fx/") && path.endsWith("/1")
                         
                         if (isGlobalTempo || isFxTime) {
                             // 3. Find type tag comma
@@ -417,14 +417,12 @@ class WingViewModel : ViewModel() {
                     val value = calculateFxValue(selectedFx.model, timeMs)
                     for (paramId in 1..4) {
                         fxMessages.add(createOscMessage("/fx/${selectedFx.id}/$paramId", value))
-                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/par/$paramId", value))
                     }
                 } else {
                     for (fx in _fxSlots.value) {
                         val value = calculateFxValue(fx.model, timeMs)
                         for (paramId in 1..4) {
                             fxMessages.add(createOscMessage("/fx/${fx.id}/$paramId", value))
-                            fxMessages.add(createOscMessage("/fx/${fx.id}/par/$paramId", value))
                         }
                     }
                 }
