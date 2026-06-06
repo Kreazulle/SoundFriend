@@ -6,7 +6,7 @@
 
 Traditional mixing on a physical console allows a sound engineer to keep their eyes fixed on the stage, relying on tactile feedback to adjust faders and knobs. However, the shift towards tablet-based mixing has introduced a significant challenge: the touch interface demands constant visual attention, pulling the engineer's focus away from the performers.
 
-In this environment, communication between the stage and the engineer becomes slow and cumbersome. **Sound Friend** was created to bridge this gap. By moving critical communication and tempo control to a wearable device, it restores the engineer's ability to stay connected with the scene, providing an efficient and non-intrusive way to handle stage requests and technical synchronization.
+**Sound Friend** restores this connection by moving critical communication and tempo control to a wearable device, providing an efficient and non-intrusive way to handle stage requests and technical synchronization.
 
 ## 🚀 Key Features
 
@@ -14,71 +14,52 @@ In this environment, communication between the stage and the engineer becomes sl
     *   Tap the watch screen to set the mixer's master clock tempo instantly.
     *   Visual pulse animation perfectly mapped to the current BPM.
 *   **Intelligent FX Delay Control**:
-    *   **Automatic Recognition**: Automatically identifies delay effects across all 16 FX slots, including `ST-DL`, `TAP-DL`, `TAPE-DL`, `BBD-DL`, and `OILCAN`.
-    *   **Individual Selection**: Choose a specific FX slot to control its time parameters with precision.
-    *   **Global Sync Mode**: Use the "Global Only" option to synchronize **all** identified delay slots on the console simultaneously with a single tap.
-    *   **Hardware-Accurate Mapping**: Implements specific OSC mappings for complex effects (`OILCAN`, `BBD`, `TAPE-DL`) ensuring the milliseconds on the watch translate correctly to the console's internal scales.
+    *   **Automatic Recognition**: Identifies delay effects across all 16 FX slots (`ST-DL`, `TAP-DL`, `TAPE-DL`, `BBD-DL`, `OILCAN`).
+    *   **Individual Selection**: Control a specific FX slot with precision.
+    *   **Global Sync Mode**: Synchronize **all** delay slots on the console simultaneously with a single tap.
+    *   **Hardware-Accurate Mapping**: Custom OSC scaling for complex effects (e.g., Oilcan 0-10.0 scale, BBD 1001ms scale).
 *   **Remote Alert System**:
     *   Receive urgent text notifications from the FOH or stage team.
     *   Supports raw **UDP (Port 5005)** and **OSC (Port 5006)** protocols.
-    *   **Urgent Alerts** (`/SoundFriend/alerts`): Trigger a persistent **60 BPM rhythmic vibration** and a red "HELP NEEDED" overlay until manually acknowledged.
-    *   **Info Messages** (`/SoundFriend/messages`): Display long messages on a blue scrollable overlay, also with rhythmic vibration until dismissed.
+    *   Urgent alerts trigger rhythmic vibrations and high-visibility overlays.
 *   **Smart Connectivity**:
     *   Automatic console discovery using the `/xinfo` protocol.
-    *   **"No Mixer" Mode**: Use the app as a standalone communication tool (alerts and manual BPM) without a console connection.
-*   **Professional Watch UI**:
-    *   Native curved clock integration.
-    *   Curved footer displaying connection status and Mixer Name.
-    *   "Always On" display mode to prevent the watch from entering standby during a performance.
-    *   Hidden settings menu accessible via a **long-press** gesture to keep the interface clean.
+    *   Standalone "No Mixer" mode for standalone use.
+
+## 📱 Cross-Platform Architecture (KMP Ready)
+
+The project has been refactored to support a **Cross-Platform architecture**. The "brain" of the application is isolated from the Android UI, making it ready for porting to other platforms.
+
+*   **Shared Core Logic**: All OSC protocol formatting, BPM calculations, and hardware-specific mappings are contained in a pure Kotlin `core` package.
+*   **Xcode / Apple Watch Ready**: The core logic is designed to be easily bridged into an Xcode project (SwiftUI) via Kotlin Multiplatform (KMP).
+*   **Platform-Specific UI**:
+    *   **Wear OS**: Fully implemented using Jetpack Compose for Wear.
+    *   **watchOS**: Ready for implementation using SwiftUI, utilizing the shared Kotlin protocol logic.
 
 ## 🛠 Technical Specifications
 
 ### Network Ports
 | Protocol | Port | Description |
 | :--- | :--- | :--- |
-| **OSC (WING)** | `10023`, `2223` | Main communication ports for tempo and discovery. |
-| **UDP Alerts** | `5005` | Receives raw text messages for urgent display (Type: ALERT). |
+| **OSC (WING)** | `10023`, `2223` | Main communication for tempo and discovery. |
+| **UDP Alerts** | `5005` | Receives raw text messages for urgent display. |
 | **OSC Alerts** | `5006` | Receives OSC formatted messages. |
-
-### OSC Notification Paths
-| Path | Type | Background | Header |
-| :--- | :--- | :--- | :--- |
-| `/SoundFriend/alerts` | Urgent Alert | Red | "HELP NEEDED:" |
-| `/SoundFriend/messages` | Info Message | Blue | (None) |
-
-### Alert Trigger Examples
-
-**Via UDP (Terminal):**
-```bash
-echo "Drums Help" > /dev/udp/[WATCH_IP]/5005
-```
-
-**Via OSC:**
-*   **Port**: `5006`
-*   **Path**: `/SoundFriend/alerts`
-*   **Value (String)**: `"Guitar String Broken"`
-
-*   **Path**: `/SoundFriend/messages`
-*   **Value (String)**: `"New Setlist: 1. Start, 2. Middle, 3. End"`
 
 ## 📖 How to Use
 
 ### Navigation & Gestures
-*   **↓ Swipe Down**: Open the **Help** screen from any menu.
-*   **↑ Swipe Up**: 
-    *   From **Tap Screen** -> Go back to **FX Selection**.
-    *   From **FX Selection** -> Go back to **Mixer Selection**.
+*   **↓ Swipe Down**: Open the **Help** screen.
+*   **↑ Swipe Up**: Navigate back through menus.
 *   **Tap (Main Screen)**: Set a new BPM (Tap Tempo).
-*   **Long Press**: Return to the **FX Selection** screen and reset current selection.
+*   **Long Press**: Reset current selection and return to FX list.
 
 ### Setup Flow
-1.  **Mixer Selection**: Tap **Scan** to find WING consoles on your network. Select your mixer from the list.
-2.  **FX Selection**: The app will query the mixer for compatible Delay/Tempo effects. Select an effect slot to sync or choose **"Use Global Only"**.
-3.  **Tap Tempo**: Once configured, you are taken to the main interface to control the tempo.
+1.  **Mixer Selection**: Scan and find WING consoles.
+2.  **FX Selection**: Choose a specific Delay slot or "Global Only".
+3.  **Tap Tempo**: Control the pulse of the show.
 
 > [!WARNING]
-> **Battery Usage**: This application keeps the screen active and network listeners running at all times to ensure instant access to tap-tempo and real-time alerts without any delay or interaction barriers. While this is essential for live performances, it results in significant battery consumption. It is recommended to start with a full charge before your session.
+> **Battery Usage**: This application uses "Always On" display and constant network listeners for instant performance. This results in high battery consumption; start with a full charge.
 
 ## 📜 Credits
 
