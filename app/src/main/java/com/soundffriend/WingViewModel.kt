@@ -1,5 +1,10 @@
 package com.soundffriend
 
+import com.soundffriend.core.WingProtocol
+import com.soundffriend.core.WingMixer
+import com.soundffriend.core.FxSlot
+import com.soundffriend.core.Notification
+import com.soundffriend.core.NotificationType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -12,13 +17,6 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.NetworkInterface
-
-data class WingMixer(val name: String, val ip: String)
-
-data class FxSlot(val id: Int, val model: String, val hasTempo: Boolean)
-
-enum class NotificationType { ALERT, INFO }
-data class Notification(val text: String, val type: NotificationType)
 
 class WingViewModel : ViewModel() {
     private val _discoveredMixers = MutableStateFlow<List<WingMixer>>(emptyList())
@@ -292,7 +290,7 @@ class WingViewModel : ViewModel() {
             val socket = getSocket()
             val message = "/xremote\u0000\u0000\u0000\u0000".toByteArray()
             val address = InetAddress.getByName(mixer.ip)
-            
+
             // Start a separate job to listen for responses
             val listenerJob = launch {
                 val receiveData = ByteArray(2048)
@@ -301,17 +299,21 @@ class WingViewModel : ViewModel() {
                     try {
                         socket.receive(receivePacket)
                         val data = receivePacket.data
-                        
+
                         // 1. Extract OSC Path
                         val nullIndex = data.indexOf(0.toByte())
                         if (nullIndex <= 0) continue
                         val path = String(data, 0, nullIndex)
-                        
-                        // 2. Identify if it's a message we care about
-                        val isGlobalTempo = (path == "/config/tempo") || (path == "/-config/tempo")
-                        val isFxTime = path.startsWith("/fx/") && path.endsWith("/1")
-                        
-                        if (isGlobalTempo || isFxTime) {
+
+                        // DEBUG: Print every message received from Wing
+                        // println("OSC RECEIVED: $path")
+
+                        // 2. Identify if it's a message we care about (Selective Bidirectional)
+                        val currentFx = _selectedFxSlot.value
+                        val isGlobalPath = (path == "/config/tempo") || (path == "/-config/tempo")
+                        val isSelectedFxPath = currentFx != null && path == "/fx/${currentFx.id}/1"
+
+                        if ((currentFx == null && isGlobalPath) || isSelectedFxPath) {
                             // 3. Find type tag comma
                             val commaIndex = data.indexOf(','.toByte())
                             if (commaIndex != -1 && (commaIndex + 1 < receivePacket.length)) {
@@ -320,20 +322,16 @@ class WingViewModel : ViewModel() {
                                     val floatStartIndex = ((commaIndex + 4) / 4) * 4
                                     if (floatStartIndex + 4 <= receivePacket.length) {
                                         val bpmBytes = data.sliceArray(floatStartIndex until (floatStartIndex + 4))
-                                        val value = byteArrayToFloat(bpmBytes)
-                                        
+                                        val value = WingProtocol.byteArrayToFloat(bpmBytes)
+
                                         var receivedBpm = 0f
-                                        if (isGlobalTempo) {
+                                        if (isGlobalPath) {
                                             receivedBpm = value // Global is already BPM
-                                        } else {
-                                            // FX Time is likely Absolute MS (> 10) or Seconds (> 0.1)
-                                            receivedBpm = when {
-                                                value > 10f -> 60000f / value // MS to BPM
-                                                value > 0.1f -> 60f / value    // Seconds to BPM
-                                                else -> 0f
-                                            }
+                                        } else if (currentFx != null) {
+                                            // Reverse calculation for FX slots based on model
+                                            receivedBpm = WingProtocol.reverseCalculateFxBpm(currentFx.model, value)
                                         }
-                                        
+
                                         if (receivedBpm in (20f..350f)) {
                                             _bpm.value = receivedBpm
                                         }
@@ -358,14 +356,6 @@ class WingViewModel : ViewModel() {
             }
             listenerJob.cancel()
         }
-    }
-
-    private fun byteArrayToFloat(bytes: ByteArray): Float {
-        val intBits = (bytes[0].toInt() and 0xFF shl 24) or
-                     (bytes[1].toInt() and 0xFF shl 16) or
-                     (bytes[2].toInt() and 0xFF shl 8) or
-                     (bytes[3].toInt() and 0xFF)
-        return java.lang.Float.intBitsToFloat(intBits)
     }
 
     private val tapTimestamps = mutableListOf<Long>()
@@ -405,8 +395,8 @@ class WingViewModel : ViewModel() {
                 val address = InetAddress.getByName(mixer.ip)
                 
                 // 1. Prepare Master Tempo Message (BPM value)
-                val msgWing = createOscMessage("/config/tempo", bpm)
-                val msgX32 = createOscMessage("/-config/tempo", bpm)
+                val msgWing = WingProtocol.createOscMessage("/config/tempo", bpm)
+                val msgX32 = WingProtocol.createOscMessage("/-config/tempo", bpm)
                 
                 // 2. Prepare FX Slot Messages
                 val timeMs = 60000f / bpm.coerceAtLeast(1f)
@@ -414,15 +404,15 @@ class WingViewModel : ViewModel() {
                 
                 val selectedFx = _selectedFxSlot.value
                 if (selectedFx != null) {
-                    val value = calculateFxValue(selectedFx.model, timeMs)
+                    val value = WingProtocol.calculateFxValue(selectedFx.model, timeMs)
                     for (paramId in 1..4) {
-                        fxMessages.add(createOscMessage("/fx/${selectedFx.id}/$paramId", value))
+                        fxMessages.add(WingProtocol.createOscMessage("/fx/${selectedFx.id}/$paramId", value))
                     }
                 } else {
                     for (fx in _fxSlots.value) {
-                        val value = calculateFxValue(fx.model, timeMs)
+                        val value = WingProtocol.calculateFxValue(fx.model, timeMs)
                         for (paramId in 1..4) {
-                            fxMessages.add(createOscMessage("/fx/${fx.id}/$paramId", value))
+                            fxMessages.add(WingProtocol.createOscMessage("/fx/${fx.id}/$paramId", value))
                         }
                     }
                 }
@@ -440,48 +430,6 @@ class WingViewModel : ViewModel() {
                 e.printStackTrace()
             }
         }
-    }
-
-    private fun calculateFxValue(model: String, timeMs: Float): Float {
-        val modelUpper = model.uppercase()
-        return when {
-            modelUpper.contains("OILCAN") || modelUpper.contains("OIL") -> {
-                // OILCAN: 1..1000 ms -> 0..10.0
-                (timeMs / 100f).coerceIn(0f, 10f)
-            }
-            modelUpper.contains("BBD-DL") || modelUpper.contains("BBD") -> {
-                // BBD Delay: 1001 ms -> 1..100 scale
-                (timeMs / 10.01f).coerceIn(1f, 100f)
-            }
-            modelUpper.contains("TAPE-DL") || modelUpper.contains("TAPE") -> {
-                // TAPE-DL: 60..650 ms range, mapped between values 60 and 650 (direct ms)
-                timeMs.coerceIn(60f, 650f)
-            }
-            else -> timeMs // ST-DL (Stereo Delay), TAP-DL, etc. use absolute ms like Ultra tap
-        }
-    }
-
-    private fun createOscMessage(path: String, value: Float): ByteArray {
-        val pathBytes = path.toByteArray()
-        // OSC strings must be null-terminated and padded to a multiple of 4 bytes
-        val pathPadding = 4 - (pathBytes.size % 4)
-        val paddedPath = pathBytes + ByteArray(pathPadding)
-        
-        val typeTag = ",f".toByteArray()
-        // ",f" is 2 bytes, needs 2 nulls to reach 4 bytes
-        val paddedType = typeTag + ByteArray(2)
-        
-        return paddedPath + paddedType + floatToByteArray(value)
-    }
-
-    private fun floatToByteArray(value: Float): ByteArray {
-        val intBits = java.lang.Float.floatToIntBits(value)
-        return byteArrayOf(
-            (intBits shr 24).toByte(),
-            (intBits shr 16).toByte(),
-            (intBits shr 8).toByte(),
-            intBits.toByte(),
-        )
     }
 
     private var alertSocket: DatagramSocket? = null

@@ -1,10 +1,10 @@
-/*
- * SoundFriend - A Wear OS remote for Behringer WING mixers.
- * This file contains the main entry point and UI navigation for the application.
- */
 package com.soundffriend
 
+import com.soundffriend.core.WingMixer
+import com.soundffriend.core.FxSlot
+import com.soundffriend.core.NotificationType
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.wear.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.Brush
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -63,9 +63,6 @@ import androidx.wear.compose.foundation.CurvedDirection
 import androidx.wear.compose.material.curvedText
 
 
-/**
- * A custom shape that draws a rounded equilateral triangle, used for the Help button.
- */
 val HelpTriangleShape = GenericShape { size, _ ->
     val s = size.width
     val h = s * 0.866f // Inaltimea triunghiului echilateral (sqrt(3)/2)
@@ -87,12 +84,6 @@ val HelpTriangleShape = GenericShape { size, _ ->
     close()
 }
 
-/**
- * The main activity for the SoundFriend Wear OS application.
- *
- * This activity initializes the splash screen, ensures the screen stays on during use,
- * and acquires a MulticastLock to allow the discovery of mixers via UDP broadcasts.
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -115,14 +106,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * The root Composable of the application.
- *
- * Manages the navigation state, notification alerts, and the main layout structure
- * using a [Scaffold] with Wear OS specific components.
- *
- * @param viewModel The [WingViewModel] that provides the application state and business logic.
- */
 @Composable
 fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     val navController = rememberSwipeDismissableNavController()
@@ -167,17 +150,16 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
                 if (animationFinished) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (isHelpScreen && (notification == null)) {
-                            // Draw semi-transparent black masks under the curved texts 
-                            // to create a "segment-cut" aesthetic on the Help screen.
+                            // Black masks under the curved texts (Segment-cut style) - Only on Help Screen
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                // Top Segment Mask (under clock)
+                                // Top Segment Mask (under clock) - Slightly larger (+10px/degrees equivalent)
                                 drawArc(
                                     color = Color.Black,
                                     startAngle = 220f,
                                     sweepAngle = 100f,
                                     useCenter = false
                                 )
-                                // Bottom Segment Mask (under mixer info)
+                                // Bottom Segment Mask (under mixer info) - Slightly larger (+10px/degrees equivalent)
                                 drawArc(
                                     color = Color.Black,
                                     startAngle = 40f,
@@ -378,14 +360,6 @@ fun SoundFriendApp(viewModel: WingViewModel = viewModel()) {
     }
 }
 
-/**
- * Displays a landing animation when the app starts.
- *
- * Features a red ring expansion and a hole-reveal effect (feathered edge) that transitions
- * from a black screen to the main content.
- *
- * @param onFinished Callback invoked when the animation completes.
- */
 @Composable
 fun LandingAnimation(onFinished: () -> Unit) {
     val animationProgress = remember { Animatable(0f) }
@@ -417,8 +391,9 @@ fun LandingAnimation(onFinished: () -> Unit) {
         // 1. Fundal negru
         drawRect(color = Color.Black)
         
-        // 2. Reveal the content with a "hole" effect using a radial gradient with feathering
+        // 2. Dezvăluirea meniului cu efect de FEATHER (Fade)
         if (holeRadius > 0f) {
+            // Folosim un gradient radial pentru a crea marginea difuză a "găurii"
             drawCircle(
                 brush = androidx.compose.ui.graphics.Brush.radialGradient(
                     colors = listOf(Color.Transparent, Color.Black),
@@ -426,7 +401,7 @@ fun LandingAnimation(onFinished: () -> Unit) {
                     radius = (holeRadius + featherWidth).coerceAtLeast(0.1f)
                 ),
                 radius = holeRadius + featherWidth,
-                blendMode = BlendMode.DstIn // Keeps what's inside the transparent part of the gradient
+                blendMode = BlendMode.DstIn // Menține ce este în interiorul gradientului (partea transparentă devine gaură)
             )
         }
         
@@ -442,25 +417,15 @@ fun LandingAnimation(onFinished: () -> Unit) {
     }
 }
 
-/**
- * The main interface for interacting with the mixer's tempo.
- *
- * Displays the current BPM and allows the user to set it via tap gestures.
- * Includes a visual pulse animation synchronized with the BPM.
- *
- * @param viewModel The application ViewModel.
- * @param onSwipeUp Navigation callback for swiping up (back to settings).
- * @param onSwipeDown Navigation callback for help.
- */
 @Composable
 fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () -> Unit) {
     val bpm by viewModel.bpm.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Animation for continuous pulse (fade-to-black) effect synced with BPM
+    // Animation for continuous fade-to-black
     var alpha by remember { mutableStateOf(1f) }
     
-    // Smooth frame-synced animation loop
+    // Use withFrameMillis for smooth, frame-synced animation
     LaunchedEffect(bpm) {
         val pulseDuration = (60000 / bpm.coerceAtLeast(1f)).toLong()
         while (true) {
@@ -468,7 +433,6 @@ fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () 
             var elapsed: Long
             do {
                 elapsed = withFrameMillis { it } - startTime
-                // Linearly decrease alpha over the duration of a beat
                 alpha = (1f - (elapsed.toFloat() / pulseDuration)).coerceIn(0f, 1f)
             } while (elapsed < pulseDuration)
             alpha = 0f
@@ -537,13 +501,6 @@ fun MainScreen(viewModel: WingViewModel, onSwipeUp: () -> Unit, onSwipeDown: () 
     }
 }
 
-/**
- * A visual representation of the mixer discovery process.
- *
- * Displays a radar-like animation with sweeping arcs and pulsing concentric circles.
- *
- * @param onLongPress Callback to stop the discovery process.
- */
 @Composable
 fun RadarScreen(onLongPress: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "RadarTransition")
@@ -623,18 +580,10 @@ fun RadarScreen(onLongPress: () -> Unit) {
     }
 }
 
-/**
- * Screen for discovering and selecting a Wing mixer on the local network.
- *
- * @param viewModel The application ViewModel.
- * @param onMixerSelected Callback when a mixer is selected from the list or Demo mode is entered.
- * @param onSwipeDown Navigation callback for help.
- * @param onHelpClick Callback for the help button.
- */
 @Composable
 fun MixerSelectionScreen(
     viewModel: WingViewModel, 
-    onMixerSelected: (WingMixer) -> Unit,
+    onMixerSelected: (com.soundffriend.core.WingMixer) -> Unit,
     onSwipeDown: () -> Unit,
     onHelpClick: () -> Unit
 ) {
@@ -716,7 +665,7 @@ fun MixerSelectionScreen(
                 }
             }
             
-            items(mixers) { mixer ->
+            items(mixers) { mixer: WingMixer ->
                 val isSelected = selectedMixer?.ip == mixer.ip
                 Chip(
                     onClick = {
@@ -741,14 +690,6 @@ fun MixerSelectionScreen(
     }
 }
 
-/**
- * Screen for selecting an FX slot to synchronize the tempo with.
- *
- * @param viewModel The application ViewModel.
- * @param onFxSelected Callback when an FX slot is selected or "Global Only" is chosen.
- * @param onSwipeUp Navigation callback to go back to mixer selection.
- * @param onSwipeDown Navigation callback for help.
- */
 @Composable
 fun FxSelectionScreen(
     viewModel: WingViewModel,
@@ -823,7 +764,7 @@ fun FxSelectionScreen(
                 }
             }
 
-            items(fxSlots) { fx ->
+            items(fxSlots) { fx: FxSlot ->
                 val isSelected = selectedFxSlot?.id == fx.id
                 Chip(
                     onClick = { 
@@ -871,12 +812,6 @@ fun FxSelectionScreen(
     }
 }
 
-/**
- * Displays help information including network details, gestures, and command examples.
- *
- * @param viewModel The application ViewModel.
- * @param onBack Callback to return to the previous screen.
- */
 @Composable
 fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
     val deviceIp by viewModel.deviceIp.collectAsState()
@@ -1016,12 +951,6 @@ fun HelpScreen(viewModel: WingViewModel, onBack: () -> Unit) {
     }
 }
 
-/**
- * Triggers a vibration on the device.
- *
- * @param context The application context.
- * @param durationMillis The duration of the vibration in milliseconds.
- */
 fun vibrate(context: Context, durationMillis: Long = 500) {
     val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
