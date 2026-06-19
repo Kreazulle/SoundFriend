@@ -4,7 +4,7 @@ package com.soundffriend.core
  * Portable data models for SoundFriend.
  */
 
-data class WingMixer(val name: String, val ip: String)
+data class WingMixer(val name: String, val ip: String, val type: String = "WING", val brand: String = "Behringer")
 
 data class FxSlot(val id: Int, val model: String, val hasTempo: Boolean)
 

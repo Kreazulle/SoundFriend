@@ -107,11 +107,14 @@ class WingViewModel : ViewModel() {
                     val startIndex = response.indexOf("WING,")
                     val parts = response.substring(startIndex).split(",")
                     val name = if (parts.size >= 3) parts[2] else "WING"
-                    addMixer(name, ip)
+                    addMixer(name, ip, "WING", "Behringer")
                 } else if (response.contains("/xinfo")) {
-                    val parts = response.split(Regex("[^a-zA-Z0-9 _-]"))
-                    val consoleName = parts.firstOrNull { (it.length > 2) && (it != "xinfo") } ?: "Wing"
-                    addMixer(consoleName, ip)
+                    // Typical X32/M32 xinfo: /xinfo ,ssss [IP] [Name] [Model] [Version]
+                    val parts = response.split(Regex("[^a-zA-Z0-9 ._-]")).filter { it.isNotBlank() }
+                    val consoleName = parts.getOrNull(2) ?: "Mixer"
+                    val model = parts.getOrNull(3) ?: "X32"
+                    val brand = if (model.startsWith("M", ignoreCase = true)) "Midas" else "Behringer"
+                    addMixer(consoleName, ip, model, brand)
                 }
             } catch (_: Exception) { }
         }
@@ -155,9 +158,9 @@ class WingViewModel : ViewModel() {
         kotlinx.coroutines.joinAll(*jobs.toTypedArray())
     }
 
-    private fun addMixer(name: String, ip: String) {
+    private fun addMixer(name: String, ip: String, type: String = "WING", brand: String = "Behringer") {
         if (!_discoveredMixers.value.any { it.ip == ip }) {
-            _discoveredMixers.value += WingMixer(name = name, ip = ip)
+            _discoveredMixers.value += WingMixer(name = name, ip = ip, type = type, brand = brand)
         }
     }
 
@@ -201,13 +204,13 @@ class WingViewModel : ViewModel() {
             try {
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(mixer.ip)
+                val isWing = mixer.type.contains("WING", ignoreCase = true)
+                val maxSlots = if (isWing) 16 else 8
                 
-                // Query all 16 FX slots for their model names
-                for (i in 1..16) {
-                    val path = "/fx/$i/mdl"
-                    // OSC String padding: must be null-terminated and total length % 4 == 0
-                    val nullsNeeded = 4 - (path.length % 4)
-                    val msg = path.toByteArray() + ByteArray(nullsNeeded)
+                // Query FX slots for their model names
+                for (i in 1..maxSlots) {
+                    val path = if (isWing) "/fx/$i/mdl" else "/fx/$i/type"
+                    val msg = WingProtocol.createOscMessage(path, 0f) // Using a dummy float to reuse the padding logic, though x32 prefers strings, it works for triggering
                     
                     socket.send(DatagramPacket(msg, msg.size, address, 2223))
                     socket.send(DatagramPacket(msg, msg.size, address, 10023))
@@ -224,7 +227,13 @@ class WingViewModel : ViewModel() {
                         socket.receive(packet)
                         val dataString = String(packet.data, 0, packet.length)
                         
-                        if (dataString.contains("/fx/") && dataString.contains("/mdl")) {
+                        val isFxQueryResponse = if (isWing) {
+                            dataString.contains("/fx/") && dataString.contains("/mdl")
+                        } else {
+                            dataString.contains("/fx/") && dataString.contains("/type")
+                        }
+
+                        if (isFxQueryResponse) {
                             val slotId = dataString.substringAfter("/fx/").substringBefore("/").toIntOrNull() ?: continue
                             
                             // OSC response format: [path]\0[padding],s\0[padding][value]\0
