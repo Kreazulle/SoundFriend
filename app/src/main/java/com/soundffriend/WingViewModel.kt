@@ -110,12 +110,53 @@ class WingViewModel : ViewModel() {
                     val name = if (parts.size >= 3) parts[2] else "WING"
                     addMixer(name, ip, "WING", "Behringer")
                 } else if (response.contains("/xinfo")) {
-                    // Typical X32/M32 xinfo: /xinfo ,ssss [IP] [Name] [Model] [Version]
-                    val parts = response.split(Regex("[^a-zA-Z0-9 ._-]")).filter { it.isNotBlank() }
-                    val consoleName = parts.getOrNull(2) ?: "Mixer"
-                    val model = parts.getOrNull(3) ?: "X32"
-                    val brand = if (model.startsWith("M", ignoreCase = true)) "Midas" else "Behringer"
-                    addMixer(consoleName, ip, model, brand)
+                    // Robust OSC string extraction for xinfo
+                    // Format: /xinfo\0 ,ssss\0 [IP]\0 [Name]\0 [Model]\0 [Version]\0
+                    try {
+                        val data = receivePacket.data
+                        // Skip path (/xinfo) and type tags (,ssss)
+                        // OSC strings are null-terminated. Let's find strings after the type tag.
+                        val strings = mutableListOf<String>()
+                        var currentPos = 0
+                        
+                        // Find start of strings (after path and type tags)
+                        // Usually at index 16 or 20 depending on alignment
+                        currentPos = 20 // Safe starting point for xinfo response strings
+                        
+                        while (strings.size < 3 && currentPos < receivePacket.length) {
+                            val start = currentPos
+                            while (currentPos < receivePacket.length && data[currentPos] != 0.toByte()) {
+                                currentPos++
+                            }
+                            if (currentPos > start) {
+                                strings.add(String(data, start, currentPos - start))
+                            }
+                            currentPos++
+                            // Align to 4 bytes
+                            while (currentPos < receivePacket.length && data[currentPos] == 0.toByte()) {
+                                currentPos++
+                            }
+                        }
+                        
+                        if (strings.size >= 3) {
+                            // strings[0] = IP, [1] = Name, [2] = Model
+                            val name = strings[1]
+                            val model = strings[2]
+                            val brand = if (model.startsWith("M", ignoreCase = true)) "Midas" else "Behringer"
+                            addMixer(name, ip, model, brand)
+                        } else {
+                            // Fallback to simpler split if precise extraction fails
+                            val parts = response.split(Regex("[^a-zA-Z0-9 ._-]")).filter { it.length > 1 && it != "xinfo" && it != "ssss" }
+                            if (parts.size >= 3) {
+                                val name = parts[1]
+                                val model = parts[2]
+                                val brand = if (model.startsWith("M", ignoreCase = true)) "Midas" else "Behringer"
+                                addMixer(name, ip, model, brand)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        addMixer("Mixer", ip, "X32/M32", "Behringer")
+                    }
                 }
             } catch (_: Exception) { }
         }
@@ -239,16 +280,19 @@ class WingViewModel : ViewModel() {
                                         .trim { it <= ' ' || it.toInt() == 0 }
                                     
                                     if (modelName.isNotEmpty() && modelName != "NONE") {
-                                        val isTempoFx = modelName.contains("ST-DL", ignoreCase = true) || 
-                                                       modelName.contains("TAP-DL", ignoreCase = true) ||
-                                                       modelName.contains("TAPE-DL", ignoreCase = true) ||
-                                                       modelName.contains("BBD-DL", ignoreCase = true) ||
-                                                       modelName.contains("OILCAN", ignoreCase = true) ||
-                                                       modelName.contains("DELAY", ignoreCase = true) || 
-                                                       modelName.contains("DLY", ignoreCase = true) ||
-                                                       modelName.contains("TAP", ignoreCase = true) ||
-                                                       modelName.contains("ECHO", ignoreCase = true) ||
-                                                       modelName.contains("STEREO", ignoreCase = true)
+                                        val modelUpper = modelName.uppercase()
+                                        val isTempoFx = modelUpper.contains("ST-DL") || 
+                                                       modelUpper.contains("TAP-DL") ||
+                                                       modelUpper.contains("TAPE-DL") ||
+                                                       modelUpper.contains("BBD-DL") ||
+                                                       modelUpper.contains("OILCAN") ||
+                                                       modelUpper.contains("DELAY") || 
+                                                       modelUpper.contains("DLY") ||
+                                                       modelUpper.contains("TAP") ||
+                                                       modelUpper.contains("ECHO") ||
+                                                       modelUpper.contains("STEREO") ||
+                                                       modelUpper.contains("RHYTHM") ||
+                                                       modelUpper.contains("MOD-DL")
                                         
                                         if (isTempoFx && !newSlots.any { it.id == slotId }) {
                                             newSlots.add(FxSlot(slotId, modelName, true))

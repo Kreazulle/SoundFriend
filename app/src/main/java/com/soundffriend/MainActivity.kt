@@ -682,11 +682,12 @@ fun MixerSelectionScreen(
                         ) 
                     },
                     secondaryLabel = { 
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = mixer.name, 
                                 fontSize = 11.sp, 
                                 color = Color.White,
+                                fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
