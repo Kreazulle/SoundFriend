@@ -272,41 +272,53 @@ class WingViewModel : ViewModel() {
                         if (handler.isFxQueryResponse(dataString)) {
                             val slotId = dataString.substringAfter("/fx/").substringBefore("/").toIntOrNull() ?: continue
                             
-                            // OSC response format: [path]\0[padding],s\0[padding][value]\0
-                            val typeTagIndex = dataString.indexOf(",s")
-                            if (typeTagIndex != -1) {
-                                val valueIndex = (typeTagIndex + 4) / 4 * 4
+                            var detectedModel: String? = null
+                            
+                            // Check for String response (WING)
+                            val sTagIndex = dataString.indexOf(",s")
+                            if (sTagIndex != -1) {
+                                val valueIndex = (sTagIndex + 4) / 4 * 4
                                 if (valueIndex < packet.length) {
-                                    val modelName = String(packet.data, valueIndex, packet.length - valueIndex)
+                                    detectedModel = String(packet.data, valueIndex, packet.length - valueIndex)
                                         .trim { it <= ' ' || it.toInt() == 0 }
-                                    
-                                    if (modelName.isNotEmpty() && modelName != "NONE") {
-                                        val modelUpper = modelName.uppercase()
-                                        val isWing = handler is WingHandler
-                                        
-                                        val isTempoFx = if (isWing) {
-                                            modelUpper.contains("ST-DL") || 
-                                            modelUpper.contains("TAP-DL") ||
-                                            modelUpper.contains("TAPE-DL") ||
-                                            modelUpper.contains("BBD-DL") ||
-                                            modelUpper.contains("OILCAN") ||
-                                            modelUpper.contains("DELAY") || 
-                                            modelUpper.contains("DLY") ||
-                                            modelUpper.contains("TAP") ||
-                                            modelUpper.contains("ECHO") ||
-                                            modelUpper.contains("STEREO")
-                                        } else {
-                                            // X32/M32 specific keywords
-                                            modelUpper.contains("DLY") || 
-                                            modelUpper.contains("3TAP") || 
-                                            modelUpper.contains("4TAP") ||
-                                            modelUpper.contains("DELAY")
-                                        }
-                                        
-                                        if (isTempoFx && !newSlots.any { it.id == slotId }) {
-                                            newSlots.add(FxSlot(slotId, modelName, true))
+                                }
+                            } else {
+                                // Check for Integer response (X32/M32)
+                                val iTagIndex = dataString.indexOf(",i")
+                                if (iTagIndex != -1) {
+                                    val valueIndex = (iTagIndex + 4) / 4 * 4
+                                    if (valueIndex + 4 <= packet.length) {
+                                        val typeInt = WingProtocol.byteArrayToInt(packet.data.sliceArray(valueIndex until valueIndex + 4))
+                                        // Map indices 10=DLY, 11=3TAP, 12=4TAP, 13=RHYTHM
+                                        detectedModel = when(typeInt) {
+                                            10 -> "DLY"
+                                            11 -> "3TAP"
+                                            12 -> "4TAP"
+                                            13 -> "RHYTHM"
+                                            else -> null
                                         }
                                     }
+                                }
+                            }
+
+                            if (detectedModel != null && detectedModel.isNotEmpty() && detectedModel != "NONE") {
+                                val modelUpper = detectedModel.uppercase()
+                                val isWing = handler is com.soundffriend.core.WingHandler
+                                
+                                val isTempoFx = if (isWing) {
+                                    modelUpper.contains("ST-DL") || modelUpper.contains("TAP-DL") ||
+                                    modelUpper.contains("TAPE-DL") || modelUpper.contains("BBD-DL") ||
+                                    modelUpper.contains("OILCAN") || modelUpper.contains("DELAY") || 
+                                    modelUpper.contains("DLY") || modelUpper.contains("TAP") ||
+                                    modelUpper.contains("ECHO") || modelUpper.contains("STEREO")
+                                } else {
+                                    modelUpper.contains("DLY") || modelUpper.contains("3TAP") || 
+                                    modelUpper.contains("4TAP") || modelUpper.contains("DELAY") ||
+                                    modelUpper.contains("RHYTHM")
+                                }
+                                
+                                if (isTempoFx && !newSlots.any { it.id == slotId }) {
+                                    newSlots.add(FxSlot(slotId, detectedModel, true))
                                 }
                             }
                         }
