@@ -289,12 +289,17 @@ class WingViewModel : ViewModel() {
                                     val valueIndex = (iTagIndex + 4) / 4 * 4
                                     if (valueIndex + 4 <= packet.length) {
                                         val typeInt = WingProtocol.byteArrayToInt(packet.data.sliceArray(valueIndex until valueIndex + 4))
-                                        // Map indices 10=DLY, 11=3TAP, 12=4TAP, 13=RHYTHM
+                                        // Map indices based on X32/M32 OSC documentation
                                         detectedModel = when(typeInt) {
+                                            6 -> "DLY+REV"
+                                            7 -> "DLY+CHAM"
+                                            8 -> "DLY+CHO"
+                                            9 -> "DLY+FLA"
                                             10 -> "DLY"
                                             11 -> "3TAP"
                                             12 -> "4TAP"
                                             13 -> "RHYTHM"
+                                            14 -> "MOD DLY"
                                             else -> null
                                         }
                                     }
@@ -473,11 +478,14 @@ class WingViewModel : ViewModel() {
 
                 val selectedFx = _selectedFxSlot.value
                 if (selectedFx != null) {
-                    val value = WingProtocol.calculateFxValue(selectedFx.model, timeMs)
-                    val paramsToSend = if (!isWing && selectedFx.model.uppercase().contains("DLY") && !selectedFx.model.uppercase().contains("TAP")) {
-                        listOf(2) // Parameter 2 for simple DLY on X32/M32
-                    } else if (!isWing) {
-                        listOf(1) // Parameter 1 for 3TAP, 4TAP on X32/M32
+                    val value = WingProtocol.calculateFxValue(selectedFx.model, timeMs, !isWing)
+                    val paramsToSend = if (!isWing) {
+                        val modelUpper = selectedFx.model.uppercase()
+                        if (modelUpper.contains("DLY") && !modelUpper.contains("TAP") && !modelUpper.contains("RHYTHM")) {
+                            listOf(2) // Parameter 2 for simple DLY, MOD DLY, DLY+REV etc on X32/M32
+                        } else {
+                            listOf(1) // Parameter 1 for 3TAP, 4TAP, RHYTHM
+                        }
                     } else {
                         listOf(1, 2, 3, 4) // WING default
                     }
@@ -489,11 +497,14 @@ class WingViewModel : ViewModel() {
                     }
                 } else {
                     for (fx in _fxSlots.value) {
-                        val value = WingProtocol.calculateFxValue(fx.model, timeMs)
-                        val paramsToSend = if (!isWing && fx.model.uppercase().contains("DLY") && !fx.model.uppercase().contains("TAP")) {
-                            listOf(2)
-                        } else if (!isWing) {
-                            listOf(1)
+                        val value = WingProtocol.calculateFxValue(fx.model, timeMs, !isWing)
+                        val paramsToSend = if (!isWing) {
+                            val modelUpper = fx.model.uppercase()
+                            if (modelUpper.contains("DLY") && !modelUpper.contains("TAP") && !modelUpper.contains("RHYTHM")) {
+                                listOf(2)
+                            } else {
+                                listOf(1)
+                            }
                         } else {
                             listOf(1, 2, 3, 4)
                         }

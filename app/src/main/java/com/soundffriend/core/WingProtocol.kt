@@ -34,8 +34,15 @@ object WingProtocol {
         )
     }
 
-    fun calculateFxValue(model: String, timeMs: Float): Float {
+    fun calculateFxValue(model: String, timeMs: Float, isNormalized: Boolean = false): Float {
         val modelUpper = model.uppercase()
+        
+        if (isNormalized) {
+            // X32/M32 specific: Most delays have a 3000ms range mapped to 0.0-1.0
+            // Some might have different ranges, but 3000ms is the standard for the ones we target.
+            return (timeMs / 3000f).coerceIn(0f, 1f)
+        }
+
         return when {
             modelUpper.contains("OILCAN") || modelUpper.contains("OIL") -> {
                 (timeMs / 100f).coerceIn(0f, 10f)
