@@ -210,7 +210,7 @@ class WingViewModel : ViewModel() {
                 // Query FX slots for their model names
                 for (i in 1..maxSlots) {
                     val path = if (isWing) "/fx/$i/mdl" else "/fx/$i/type"
-                    val msg = WingProtocol.createOscMessage(path, 0f) // Using a dummy float to reuse the padding logic, though x32 prefers strings, it works for triggering
+                    val msg = WingProtocol.createOscQueryMessage(path)
                     
                     socket.send(DatagramPacket(msg, msg.size, address, 2223))
                     socket.send(DatagramPacket(msg, msg.size, address, 10023))

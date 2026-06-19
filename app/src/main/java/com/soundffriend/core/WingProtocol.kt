@@ -18,6 +18,12 @@ object WingProtocol {
         return paddedPath + paddedType + floatToByteArray(value)
     }
 
+    fun createOscQueryMessage(path: String): ByteArray {
+        val pathBytes = path.toByteArray()
+        val nullsNeeded = 4 - (pathBytes.size % 4)
+        return pathBytes + ByteArray(nullsNeeded)
+    }
+
     fun floatToByteArray(value: Float): ByteArray {
         val intBits = java.lang.Float.floatToIntBits(value)
         return byteArrayOf(
