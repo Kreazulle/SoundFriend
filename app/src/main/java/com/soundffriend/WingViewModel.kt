@@ -6,6 +6,7 @@ import com.soundffriend.core.FxSlot
 import com.soundffriend.core.Notification
 import com.soundffriend.core.NotificationType
 import com.soundffriend.core.MixerHandlerFactory
+import com.soundffriend.core.WingHandler
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -281,18 +282,26 @@ class WingViewModel : ViewModel() {
                                     
                                     if (modelName.isNotEmpty() && modelName != "NONE") {
                                         val modelUpper = modelName.uppercase()
-                                        val isTempoFx = modelUpper.contains("ST-DL") || 
-                                                       modelUpper.contains("TAP-DL") ||
-                                                       modelUpper.contains("TAPE-DL") ||
-                                                       modelUpper.contains("BBD-DL") ||
-                                                       modelUpper.contains("OILCAN") ||
-                                                       modelUpper.contains("DELAY") || 
-                                                       modelUpper.contains("DLY") ||
-                                                       modelUpper.contains("TAP") ||
-                                                       modelUpper.contains("ECHO") ||
-                                                       modelUpper.contains("STEREO") ||
-                                                       modelUpper.contains("RHYTHM") ||
-                                                       modelUpper.contains("MOD-DL")
+                                        val isWing = handler is WingHandler
+                                        
+                                        val isTempoFx = if (isWing) {
+                                            modelUpper.contains("ST-DL") || 
+                                            modelUpper.contains("TAP-DL") ||
+                                            modelUpper.contains("TAPE-DL") ||
+                                            modelUpper.contains("BBD-DL") ||
+                                            modelUpper.contains("OILCAN") ||
+                                            modelUpper.contains("DELAY") || 
+                                            modelUpper.contains("DLY") ||
+                                            modelUpper.contains("TAP") ||
+                                            modelUpper.contains("ECHO") ||
+                                            modelUpper.contains("STEREO")
+                                        } else {
+                                            // X32/M32 specific keywords
+                                            modelUpper.contains("DLY") || 
+                                            modelUpper.contains("3TAP") || 
+                                            modelUpper.contains("4TAP") ||
+                                            modelUpper.contains("DELAY")
+                                        }
                                         
                                         if (isTempoFx && !newSlots.any { it.id == slotId }) {
                                             newSlots.add(FxSlot(slotId, modelName, true))
@@ -448,10 +457,20 @@ class WingViewModel : ViewModel() {
                 val timeMs = 60000f / bpm.coerceAtLeast(1f)
                 val fxMessages = mutableListOf<ByteArray>()
                 
+                val isWing = handler is WingHandler
+
                 val selectedFx = _selectedFxSlot.value
                 if (selectedFx != null) {
                     val value = WingProtocol.calculateFxValue(selectedFx.model, timeMs)
-                    for (paramId in 1..4) {
+                    val paramsToSend = if (!isWing && selectedFx.model.uppercase().contains("DLY") && !selectedFx.model.uppercase().contains("TAP")) {
+                        listOf(2) // Parameter 2 for simple DLY on X32/M32
+                    } else if (!isWing) {
+                        listOf(1) // Parameter 1 for 3TAP, 4TAP on X32/M32
+                    } else {
+                        listOf(1, 2, 3, 4) // WING default
+                    }
+
+                    for (paramId in paramsToSend) {
                         handler.getFxParamPaths(selectedFx.id, paramId).forEach { path ->
                             fxMessages.add(WingProtocol.createOscMessage(path, value))
                         }
@@ -459,7 +478,15 @@ class WingViewModel : ViewModel() {
                 } else {
                     for (fx in _fxSlots.value) {
                         val value = WingProtocol.calculateFxValue(fx.model, timeMs)
-                        for (paramId in 1..4) {
+                        val paramsToSend = if (!isWing && fx.model.uppercase().contains("DLY") && !fx.model.uppercase().contains("TAP")) {
+                            listOf(2)
+                        } else if (!isWing) {
+                            listOf(1)
+                        } else {
+                            listOf(1, 2, 3, 4)
+                        }
+
+                        for (paramId in paramsToSend) {
                             handler.getFxParamPaths(fx.id, paramId).forEach { path ->
                                 fxMessages.add(WingProtocol.createOscMessage(path, value))
                             }

@@ -31,17 +31,16 @@ object WingHandler : MixerHandler {
 object X32Handler : MixerHandler {
     override val brand = "Behringer"
     override val model = "X32"
-    override val maxFxSlots = 8
+    override val maxFxSlots = 4 // Only first 4 slots are sidechain/delay capable on X32/M32
     
     override fun getFxQueryPath(slotId: Int) = "/fx/$slotId/type"
     
     override fun getTempoPaths() = listOf("/-config/tempo", "/config/tempo")
     
     override fun getFxParamPaths(slotId: Int, paramId: Int): List<String> {
-        // X32/M32 delays usually use parameter 1 for time.
-        // We send to both formats just in case.
-        val parStr = paramId.toString().padStart(2, '0')
-        return listOf("/fx/$slotId/par/$parStr", "/fx/$slotId/$paramId")
+        // paramId here is ignored in favor of hardcoded logic based on slot
+        // But we'll handle it via the specialized logic in WingViewModel or enhance this
+        return listOf("/fx/$slotId/par/${paramId.toString().padStart(2, '0')}")
     }
     
     override fun isFxQueryResponse(path: String) = path.contains("/fx/") && path.contains("/type")
@@ -50,15 +49,14 @@ object X32Handler : MixerHandler {
 object M32Handler : MixerHandler {
     override val brand = "Midas"
     override val model = "M32"
-    override val maxFxSlots = 8
+    override val maxFxSlots = 4 // Only first 4 slots are sidechain/delay capable on X32/M32
     
     override fun getFxQueryPath(slotId: Int) = "/fx/$slotId/type"
     
     override fun getTempoPaths() = listOf("/-config/tempo", "/config/tempo")
     
     override fun getFxParamPaths(slotId: Int, paramId: Int): List<String> {
-        val parStr = paramId.toString().padStart(2, '0')
-        return listOf("/fx/$slotId/par/$parStr", "/fx/$slotId/$paramId")
+        return listOf("/fx/$slotId/par/${paramId.toString().padStart(2, '0')}")
     }
     
     override fun isFxQueryResponse(path: String) = path.contains("/fx/") && path.contains("/type")
