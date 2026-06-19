@@ -5,6 +5,7 @@ import com.soundffriend.core.WingMixer
 import com.soundffriend.core.FxSlot
 import com.soundffriend.core.Notification
 import com.soundffriend.core.NotificationType
+import com.soundffriend.core.MixerHandlerFactory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -204,12 +205,11 @@ class WingViewModel : ViewModel() {
             try {
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(mixer.ip)
-                val isWing = mixer.type.contains("WING", ignoreCase = true)
-                val maxSlots = if (isWing) 16 else 8
+                val handler = MixerHandlerFactory.getHandler(mixer.brand, mixer.type)
                 
                 // Query FX slots for their model names
-                for (i in 1..maxSlots) {
-                    val path = if (isWing) "/fx/$i/mdl" else "/fx/$i/type"
+                for (i in 1..handler.maxFxSlots) {
+                    val path = handler.getFxQueryPath(i)
                     val msg = WingProtocol.createOscQueryMessage(path)
                     
                     socket.send(DatagramPacket(msg, msg.size, address, 2223))
@@ -227,20 +227,12 @@ class WingViewModel : ViewModel() {
                         socket.receive(packet)
                         val dataString = String(packet.data, 0, packet.length)
                         
-                        val isFxQueryResponse = if (isWing) {
-                            dataString.contains("/fx/") && dataString.contains("/mdl")
-                        } else {
-                            dataString.contains("/fx/") && dataString.contains("/type")
-                        }
-
-                        if (isFxQueryResponse) {
+                        if (handler.isFxQueryResponse(dataString)) {
                             val slotId = dataString.substringAfter("/fx/").substringBefore("/").toIntOrNull() ?: continue
                             
                             // OSC response format: [path]\0[padding],s\0[padding][value]\0
-                            // We look for the model name after the ",s" tag
                             val typeTagIndex = dataString.indexOf(",s")
                             if (typeTagIndex != -1) {
-                                // The string value usually starts 4 bytes after the start of ",s" tag (aligned)
                                 val valueIndex = (typeTagIndex + 4) / 4 * 4
                                 if (valueIndex < packet.length) {
                                     val modelName = String(packet.data, valueIndex, packet.length - valueIndex)
@@ -314,13 +306,12 @@ class WingViewModel : ViewModel() {
                         if (nullIndex <= 0) continue
                         val path = String(data, 0, nullIndex)
 
-                        // DEBUG: Print every message received from Wing
-                        // println("OSC RECEIVED: $path")
-
                         // 2. Identify if it's a message we care about (Selective Bidirectional)
+                        val handler = MixerHandlerFactory.getHandler(mixer.brand, mixer.type)
                         val currentFx = _selectedFxSlot.value
-                        val isGlobalPath = (path == "/config/tempo") || (path == "/-config/tempo")
-                        val isSelectedFxPath = currentFx != null && path == "/fx/${currentFx.id}/1"
+                        
+                        val isGlobalPath = handler.getTempoPaths().contains(path)
+                        val isSelectedFxPath = currentFx != null && handler.getFxParamPaths(currentFx.id, 1).contains(path)
 
                         if ((currentFx == null && isGlobalPath) || isSelectedFxPath) {
                             // 3. Find type tag comma
@@ -402,10 +393,12 @@ class WingViewModel : ViewModel() {
             try {
                 val socket = getSocket()
                 val address = InetAddress.getByName(mixer.ip)
+                val handler = MixerHandlerFactory.getHandler(mixer.brand, mixer.type)
                 
-                // 1. Prepare Master Tempo Message (BPM value)
-                val msgWing = WingProtocol.createOscMessage("/config/tempo", bpm)
-                val msgX32 = WingProtocol.createOscMessage("/-config/tempo", bpm)
+                // 1. Prepare Tempo Messages
+                val tempoMessages = handler.getTempoPaths().map { path ->
+                    WingProtocol.createOscMessage(path, bpm)
+                }
                 
                 // 2. Prepare FX Slot Messages
                 val timeMs = 60000f / bpm.coerceAtLeast(1f)
@@ -415,25 +408,26 @@ class WingViewModel : ViewModel() {
                 if (selectedFx != null) {
                     val value = WingProtocol.calculateFxValue(selectedFx.model, timeMs)
                     for (paramId in 1..4) {
-                        fxMessages.add(WingProtocol.createOscMessage("/fx/${selectedFx.id}/$paramId", value))
+                        handler.getFxParamPaths(selectedFx.id, paramId).forEach { path ->
+                            fxMessages.add(WingProtocol.createOscMessage(path, value))
+                        }
                     }
                 } else {
                     for (fx in _fxSlots.value) {
                         val value = WingProtocol.calculateFxValue(fx.model, timeMs)
                         for (paramId in 1..4) {
-                            fxMessages.add(WingProtocol.createOscMessage("/fx/${fx.id}/$paramId", value))
+                            handler.getFxParamPaths(fx.id, paramId).forEach { path ->
+                                fxMessages.add(WingProtocol.createOscMessage(path, value))
+                            }
                         }
                     }
                 }
 
-                // 3. Send to all relevant ports using the shared socket
+                // 3. Send using the shared socket
                 val ports = listOf(2223, 10023)
                 for (port in ports) {
-                    socket.send(DatagramPacket(msgWing, msgWing.size, address, port))
-                    socket.send(DatagramPacket(msgX32, msgX32.size, address, port))
-                    for (fxMsg in fxMessages) {
-                        socket.send(DatagramPacket(fxMsg, fxMsg.size, address, port))
-                    }
+                    tempoMessages.forEach { msg -> socket.send(DatagramPacket(msg, msg.size, address, port)) }
+                    fxMessages.forEach { msg -> socket.send(DatagramPacket(msg, msg.size, address, port)) }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

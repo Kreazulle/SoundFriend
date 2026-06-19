@@ -675,13 +675,29 @@ fun MixerSelectionScreen(
                     label = { 
                         Text(
                             "${mixer.brand} :: ${mixer.type}", 
-                            fontSize = 14.sp, 
+                            fontSize = 13.sp, 
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         ) 
                     },
-                    secondaryLabel = { Text("${mixer.name} (${mixer.ip})", fontSize = 11.sp) },
+                    secondaryLabel = { 
+                        Column {
+                            Text(
+                                text = mixer.name, 
+                                fontSize = 11.sp, 
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = mixer.ip, 
+                                fontSize = 10.sp, 
+                                color = Color.Gray,
+                                maxLines = 1
+                            )
+                        }
+                    },
                     colors = if (isSelected) ChipDefaults.gradientBackgroundChipColors() 
                              else ChipDefaults.secondaryChipColors(),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
