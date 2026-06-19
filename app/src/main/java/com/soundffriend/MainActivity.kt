@@ -694,7 +694,7 @@ fun MixerSelectionScreen(
                             Text(
                                 text = mixer.ip, 
                                 fontSize = 10.sp, 
-                                color = Color.Gray,
+                                color = Color.White.copy(alpha = 0.7f),
                                 maxLines = 1
                             )
                         }
